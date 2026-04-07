@@ -121,6 +121,29 @@ When you use **AgriBot** (`/chat`), that profile is sent as **`farmProfile`** in
 
 ---
 
+## 8. Push this repo to GitHub (`abhinav429/cropaiplus`)
+
+The remote **`abhinav`** is set to [github.com/abhinav429/cropaiplus](https://github.com/abhinav429/cropaiplus). **You must sign in once** (this machine cannot push without your credentials).
+
+**Option A — run the helper script** (from the project root):
+
+```bash
+chmod +x scripts/push-to-abhinav.sh   # once
+./scripts/push-to-abhinav.sh
+# or: npm run push:github
+```
+
+When Git asks to authenticate, use **GitHub → Settings → Developer settings → Personal access tokens** and paste a token with **`repo`** scope as the password (HTTPS), or set up **SSH keys** and switch the remote:
+
+```bash
+git remote set-url abhinav git@github.com:abhinav429/cropaiplus.git
+git push -u abhinav main
+```
+
+After a successful push, the repo page shows your files **immediately** (no long wait).
+
+---
+
 ## Security reminder
 
 Do **not** commit **`.env.local`**, API keys, or Firebase secrets. Share **`.env.local.example`** (template only) with your team.

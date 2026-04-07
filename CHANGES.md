@@ -59,6 +59,13 @@ This document summarizes **features and fixes** added during development. Use it
 
 ---
 
+## 8. GitHub push helper
+
+- **`scripts/push-to-abhinav.sh`** — pushes `main` to remote `abhinav` (`abhinav429/cropaiplus`); **`npm run push:github`** runs it.
+- **`README.md`** — §8 documents HTTPS (PAT) vs SSH.
+
+---
+
 ## Files to send
 
 - Send the **whole project folder** (or a **git archive**). Do **not** commit `node_modules`; run `npm install`.
