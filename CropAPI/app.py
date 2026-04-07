@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
@@ -6,26 +8,30 @@ import numpy as np
 import pandas as pd
 import logging
 
+# Project-local paths (works on macOS/Linux/Windows; keep model + CSV next to app.py)
+BASE_DIR = Path(__file__).resolve().parent
+
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["POST", "GET"],  
     allow_headers=["*"],
 )
 
-# Load the model (try compile=False)
+# Load the model (try compile=False). Place tea_VGG16_model.h5 in CropAPI/.
 model = tf.keras.models.load_model(
-    r'C:\Users\HP\Projects\crop-ai-frontend\CropAPI\tea_VGG16_model.h5',
-    compile=False
+    str(BASE_DIR / "tea_VGG16_model.h5"),
+    compile=False,
 )
 
 # Load class labels and clean them
-class_labels = pd.read_csv(
-    r'C:\Users\HP\Projects\crop-ai-frontend\CropAPI\tea diseases.csv'
-)["folder_name"].str.strip().tolist()
+class_labels = pd.read_csv(BASE_DIR / "tea diseases.csv")["folder_name"].str.strip().tolist()
 
 # Debugging: Print class labels to verify correctness
 print(f"Class Labels: {class_labels}")

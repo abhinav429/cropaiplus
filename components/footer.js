@@ -1,7 +1,11 @@
+"use client"
+
 import Link from "next/link"
 import { Leaf, Facebook, Twitter, Instagram, Youtube } from "lucide-react"
+import { useLanguage } from "@/contexts/LanguageContext"
 
 export default function Footer() {
+  const { t } = useLanguage()
   return (
     <footer className="border-t bg-background/50 backdrop-blur-sm">
       <div className="container px-4 py-12 md:px-6 lg:py-16">
@@ -12,8 +16,7 @@ export default function Footer() {
               <span className="text-xl font-bold">Crop AI</span>
             </div>
             <p className="text-sm text-muted-foreground max-w-xs">
-              Empowering farmers with AI-driven insights to improve crop yield, detect diseases early, and optimize
-              farming practices.
+              {t("footer.tagline")}
             </p>
             <div className="flex space-x-4">
               <Link href="#" aria-label="Facebook">
@@ -31,83 +34,88 @@ export default function Footer() {
             </div>
           </div>
           <div className="space-y-4">
-            <h3 className="text-sm font-medium">Features</h3>
+            <h3 className="text-sm font-medium">{t("footer.features")}</h3>
             <ul className="space-y-2 text-sm">
               <li>
                 <Link href="/detect" className="text-muted-foreground hover:text-primary transition-colors">
-                  Disease Detection
+                  {t("footer.diseaseDetection")}
                 </Link>
               </li>
               <li>
                 <Link href="/chat" className="text-muted-foreground hover:text-primary transition-colors">
-                  AI Assistant
+                  {t("footer.aiAssistant")}
+                </Link>
+              </li>
+              <li>
+                <Link href="/farm-profile" className="text-muted-foreground hover:text-primary transition-colors">
+                  {t("footer.farmProfile")}
                 </Link>
               </li>
               <li>
                 <Link href="/marketplace" className="text-muted-foreground hover:text-primary transition-colors">
-                  Marketplace
+                  {t("footer.marketplace")}
                 </Link>
               </li>
               <li>
                 <Link href="/dashboard" className="text-muted-foreground hover:text-primary transition-colors">
-                  Insights Dashboard
+                  {t("footer.insightsDashboard")}
                 </Link>
               </li>
             </ul>
           </div>
           <div className="space-y-4">
-            <h3 className="text-sm font-medium">Resources</h3>
+            <h3 className="text-sm font-medium">{t("footer.resources")}</h3>
             <ul className="space-y-2 text-sm">
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                  Knowledge Base
+                  {t("footer.knowledgeBase")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                  Crop Calendar
+                  {t("footer.cropCalendar")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                  Weather Forecasts
+                  {t("footer.weatherForecasts")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                  Farming Community
+                  {t("footer.farmingCommunity")}
                 </Link>
               </li>
             </ul>
           </div>
           <div className="space-y-4">
-            <h3 className="text-sm font-medium">Legal</h3>
+            <h3 className="text-sm font-medium">{t("footer.legal")}</h3>
             <ul className="space-y-2 text-sm">
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                  Terms of Service
+                  {t("footer.terms")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                  Privacy Policy
+                  {t("footer.privacy")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                  Cookie Policy
+                  {t("footer.cookies")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                  Contact Us
+                  {t("footer.contact")}
                 </Link>
               </li>
             </ul>
           </div>
         </div>
         <div className="mt-12 border-t pt-8 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} Crop AI. All rights reserved.
+          &copy; {new Date().getFullYear()} Crop AI. {t("footer.rights")}
         </div>
       </div>
     </footer>

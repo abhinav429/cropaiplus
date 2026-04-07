@@ -1,90 +1,112 @@
 "use client"
 
 import { useState } from "react"
+import { useLanguage } from "@/contexts/LanguageContext"
 
 export default function PaymentGateway() {
-  const [cardNumber, setCardNumber] = useState("");
-  const [expiryDate, setExpiryDate] = useState("");
-  const [cvv, setCvv] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("creditCard");
+  const { t } = useLanguage()
+  const [cardNumber, setCardNumber] = useState("")
+  const [expiryDate, setExpiryDate] = useState("")
+  const [cvv, setCvv] = useState("")
+  const [paymentMethod, setPaymentMethod] = useState("creditCard")
+
+  const methodLabel = () => {
+    switch (paymentMethod) {
+      case "creditCard":
+        return t("payment.creditCard")
+      case "debitCard":
+        return t("payment.debitCard")
+      case "upi":
+        return t("payment.upi")
+      case "payOnDelivery":
+        return t("payment.payOnDelivery")
+      default:
+        return paymentMethod
+    }
+  }
 
   const handlePayment = (e) => {
-    e.preventDefault();
-    // Simulate payment processing
-    alert(`Payment processed successfully using ${paymentMethod}!`);
-  };
+    e.preventDefault()
+    alert(t("payment.successDemo").replace("{method}", methodLabel()))
+  }
 
   const handlePaymentMethodChange = (e) => {
-    const selectedMethod = e.target.value;
-    setPaymentMethod(selectedMethod);
-  };
+    setPaymentMethod(e.target.value)
+  }
 
   return (
     <div className="container mx-auto py-8 bg-white shadow-lg rounded-lg">
-      <h1 className="text-3xl font-bold mb-6 text-primary">Payment Gateway</h1>
+      <h1 className="text-3xl font-bold mb-6 text-primary">{t("payment.title")}</h1>
       <form onSubmit={handlePayment} className="mt-6 space-y-4">
         <div>
-          <label className="block mb-2">Payment Method:</label>
-          <select 
-            value={paymentMethod} 
+          <label className="block mb-2">{t("payment.method")}</label>
+          <select
+            value={paymentMethod}
             onChange={handlePaymentMethodChange}
-            className="border rounded w-full py-2 px-3" 
+            className="border rounded w-full py-2 px-3"
             required
           >
-            <option value="creditCard">Credit Card</option>
-            <option value="debitCard">Debit Card</option>
-            <option value="upi">UPI</option>
-            <option value="payOnDelivery">Pay on Delivery</option>
+            <option value="creditCard">{t("payment.creditCard")}</option>
+            <option value="debitCard">{t("payment.debitCard")}</option>
+            <option value="upi">{t("payment.upi")}</option>
+            <option value="payOnDelivery">{t("payment.payOnDelivery")}</option>
           </select>
         </div>
         {(paymentMethod === "creditCard" || paymentMethod === "debitCard") && (
           <>
             <div>
-              <label className="block mb-2">Card Number:</label>
-              <input 
-                type="text" 
-                value={cardNumber} 
-                onChange={(e) => setCardNumber(e.target.value)} 
-                className="border rounded w-full py-2 px-3" 
-                required 
+              <label className="block mb-2">{t("payment.cardNumber")}</label>
+              <input
+                type="text"
+                value={cardNumber}
+                onChange={(e) => setCardNumber(e.target.value)}
+                className="border rounded w-full py-2 px-3"
+                required
               />
             </div>
             <div>
-              <label className="block mb-2">Expiry Date:</label>
-              <input 
-                type="text" 
-                value={expiryDate} 
-                onChange={(e) => setExpiryDate(e.target.value)} 
-                className="border rounded w-full py-2 px-3" 
-                placeholder="MM/YY" 
-                required 
+              <label className="block mb-2">{t("payment.expiry")}</label>
+              <input
+                type="text"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                className="border rounded w-full py-2 px-3"
+                placeholder={t("payment.expiryPlaceholder")}
+                required
               />
             </div>
             <div>
-              <label className="block mb-2">CVV:</label>
-              <input 
-                type="text" 
-                value={cvv} 
-                onChange={(e) => setCvv(e.target.value)} 
-                className="border rounded w-full py-2 px-3" 
-                required 
+              <label className="block mb-2">{t("payment.cvv")}</label>
+              <input
+                type="text"
+                value={cvv}
+                onChange={(e) => setCvv(e.target.value)}
+                className="border rounded w-full py-2 px-3"
+                required
               />
             </div>
           </>
         )}
-        <button type="submit" className="mt-6 w-full py-3 rounded-lg bg-primary text-white font-semibold hover:bg-primary-dark transition">
-          Confirm Payment
+        <button
+          type="submit"
+          className="mt-6 w-full py-3 rounded-lg bg-primary text-white font-semibold hover:opacity-90 transition"
+        >
+          {t("payment.confirm")}
         </button>
       </form>
       {paymentMethod === "upi" && (
         <div className="mt-6">
-          <h2 className="text-xl font-bold">Scan QR Code to Pay:</h2>
-          <img src="\images\paymentupi.jpg" alt="QR Code" className="mt-4" style={{ width: '300px', height: 'auto' }} />
+          <h2 className="text-xl font-bold">{t("payment.scanQr")}</h2>
+          <img
+            src="/images/paymentupi.jpg"
+            alt="UPI QR"
+            className="mt-4 max-w-[300px] h-auto"
+          />
         </div>
       )}
       {paymentMethod === "payOnDelivery" && (
         <div className="mt-6">
-          <h2 className="text-xl font-bold">You have selected Pay on Delivery.</h2>
+          <h2 className="text-xl font-bold">{t("payment.payOnDeliveryMsg")}</h2>
         </div>
       )}
     </div>

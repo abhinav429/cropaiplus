@@ -7,10 +7,13 @@ import { Menu, Leaf, ShoppingCart, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useAuth } from "@/contexts/AuthContext"
+import { useLanguage } from "@/contexts/LanguageContext"
+import LanguageSwitcher from "@/components/LanguageSwitcher"
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
   const { user } = useAuth()
+  const { t } = useLanguage()
   const isLoggedIn = !!user
   const pathname = usePathname()
 
@@ -24,12 +27,11 @@ export default function Navbar() {
 
   const navLinks = isLoggedIn
     ? [
-        { href: "/", label: "Home" },
-        { href: "/detect", label: "Disease Detection" },
-        { href: "/chat", label: "AgriBot" },
-        { href: "/marketplace", label: "Marketplace" },
-        
-        
+        { href: "/", label: t("nav.home") },
+        { href: "/detect", label: t("nav.diseaseDetection") },
+        { href: "/chat", label: t("nav.agriBot") },
+        { href: "/farm-profile", label: t("nav.farmProfile") },
+        { href: "/marketplace", label: t("nav.marketplace") },
       ]
     : [
         
@@ -62,17 +64,18 @@ export default function Navbar() {
           ))}
         </nav>
 
-        <div className="hidden md:flex items-center gap-4">
+        <div className="hidden md:flex items-center gap-3">
+          <LanguageSwitcher />
           <Link href="/marketplace/cart">
             <Button variant="ghost" size="icon" aria-label="Shopping Cart">
               <ShoppingCart className="h-5 w-5" />
             </Button>
           </Link>
           <Link href="/auth/login">
-            <Button variant="ghost">Login</Button>
+            <Button variant="ghost">{t("nav.login")}</Button>
           </Link>
           <Link href="/auth/signup">
-            <Button>Sign Up</Button>
+            <Button>{t("nav.signUp")}</Button>
           </Link>
         </div>
 
@@ -85,6 +88,9 @@ export default function Navbar() {
           </SheetTrigger>
           <SheetContent side="right" className="w-[250px] sm:w-[300px]">
             <nav className="flex flex-col gap-4 mt-8">
+              <div className="pb-2">
+                <LanguageSwitcher className="w-full" />
+              </div>
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
@@ -98,10 +104,10 @@ export default function Navbar() {
               ))}
               <div className="mt-4 pt-4 border-t flex flex-col gap-2">
                 <Link href="/auth/login">
-                  <Button variant="ghost" className="w-full">Login</Button>
+                  <Button variant="ghost" className="w-full">{t("nav.login")}</Button>
                 </Link>
                 <Link href="/auth/signup">
-                  <Button className="w-full">Sign Up</Button>
+                  <Button className="w-full">{t("nav.signUp")}</Button>
                 </Link>
               </div>
             </nav>

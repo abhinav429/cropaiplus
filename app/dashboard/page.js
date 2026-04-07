@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useMemo } from "react"
 import { motion } from "framer-motion"
 import {
   BarChart,
@@ -25,6 +25,7 @@ import { ChartContainer, ChartTooltipContent, ChartTooltip } from "@/components/
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { useLanguage } from "@/contexts/LanguageContext"
 
 // Mock data for charts
 const yieldData = [
@@ -40,14 +41,6 @@ const yieldData = [
   { month: "Oct", current: 100, previous: 80 },
   { month: "Nov", current: 80, previous: 65 },
   { month: "Dec", current: 70, previous: 60 },
-]
-
-const soilHealthData = [
-  { name: "pH Level", value: 6.5, target: [6.0, 7.0] },
-  { name: "Nitrogen", value: 65, target: [50, 75] },
-  { name: "Phosphorus", value: 45, target: [40, 60] },
-  { name: "Potassium", value: 80, target: [70, 90] },
-  { name: "Organic Matter", value: 3.8, target: [3.5, 5.0] },
 ]
 
 const cropDistributionData = [
@@ -115,6 +108,19 @@ const scanHistoryData = [
 ]
 
 export default function DashboardPage() {
+  const { t } = useLanguage()
+
+  const soilHealthData = useMemo(
+    () => [
+      { name: t("dashboard.soilPh"), value: 6.5, target: [6.0, 7.0] },
+      { name: t("dashboard.soilN"), value: 65, target: [50, 75] },
+      { name: t("dashboard.soilP"), value: 45, target: [40, 60] },
+      { name: t("dashboard.soilK"), value: 80, target: [70, 90] },
+      { name: t("dashboard.soilOm"), value: 3.8, target: [3.5, 5.0] },
+    ],
+    [t]
+  )
+
   const [scanHistory, setScanHistory] = useState(scanHistoryData)
   const [filteredHistory, setFilteredHistory] = useState(scanHistory)
   const [searchQuery, setSearchQuery] = useState("")
@@ -152,13 +158,13 @@ export default function DashboardPage() {
         className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8"
       >
         <div>
-          <h1 className="text-3xl font-bold">Farm Dashboard</h1>
-          <p className="text-muted-foreground">Analytics and insights for your farm</p>
+          <h1 className="text-3xl font-bold">{t("dashboard.title")}</h1>
+          <p className="text-muted-foreground">{t("dashboard.subtitle")}</p>
         </div>
 
         <Button className="w-full md:w-auto gap-2">
           <Calendar className="h-4 w-4" />
-          Last 12 Months
+          {t("dashboard.last12Months")}
         </Button>
       </motion.div>
 
@@ -171,13 +177,13 @@ export default function DashboardPage() {
         >
           <Card>
             <CardHeader className="pb-2">
-              <CardDescription>Crop Yield</CardDescription>
+              <CardDescription>{t("dashboard.cropYield")}</CardDescription>
               <CardTitle className="text-3xl">+24%</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center space-x-2 text-sm">
                 <ArrowUp className="h-4 w-4 text-green-500" />
-                <span className="text-green-500">Improvement from last year</span>
+                <span className="text-green-500">{t("dashboard.yieldImprovement")}</span>
               </div>
             </CardContent>
           </Card>
@@ -190,13 +196,13 @@ export default function DashboardPage() {
         >
           <Card>
             <CardHeader className="pb-2">
-              <CardDescription>Soil Health Index</CardDescription>
+              <CardDescription>{t("dashboard.soilHealthIndex")}</CardDescription>
               <CardTitle className="text-3xl">82/100</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center space-x-2 text-sm">
                 <ArrowUp className="h-4 w-4 text-green-500" />
-                <span className="text-green-500">+5 points from last test</span>
+                <span className="text-green-500">{t("dashboard.soilPointsUp")}</span>
               </div>
             </CardContent>
           </Card>
@@ -209,13 +215,13 @@ export default function DashboardPage() {
         >
           <Card>
             <CardHeader className="pb-2">
-              <CardDescription>Diseases Prevented</CardDescription>
+              <CardDescription>{t("dashboard.diseasesPrevented")}</CardDescription>
               <CardTitle className="text-3xl">8</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center space-x-2 text-sm">
                 <Clock className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Last 12 months</span>
+                <span className="text-muted-foreground">{t("dashboard.last12MonthsShort")}</span>
               </div>
             </CardContent>
           </Card>
@@ -228,13 +234,13 @@ export default function DashboardPage() {
         >
           <Card>
             <CardHeader className="pb-2">
-              <CardDescription>Cost Reduction</CardDescription>
+              <CardDescription>{t("dashboard.costReduction")}</CardDescription>
               <CardTitle className="text-3xl">$5,240</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center space-x-2 text-sm">
                 <ArrowDown className="h-4 w-4 text-green-500" />
-                <span className="text-green-500">18% less than projected</span>
+                <span className="text-green-500">{t("dashboard.costLessProjected")}</span>
               </div>
             </CardContent>
           </Card>
@@ -250,18 +256,18 @@ export default function DashboardPage() {
         >
           <Card className="h-full">
             <CardHeader>
-              <CardTitle>Crop Yield Comparison</CardTitle>
-              <CardDescription>Current year vs. Previous year (bushels/acre)</CardDescription>
+              <CardTitle>{t("dashboard.chartYieldTitle")}</CardTitle>
+              <CardDescription>{t("dashboard.chartYieldDesc")}</CardDescription>
             </CardHeader>
             <CardContent className="h-[350px]">
               <ChartContainer
                 config={{
                   current: {
-                    label: "Current Year",
+                    label: t("dashboard.chartCurrentYear"),
                     color: "hsl(var(--chart-1))",
                   },
                   previous: {
-                    label: "Previous Year",
+                    label: t("dashboard.chartPreviousYear"),
                     color: "hsl(var(--chart-2))",
                   },
                 }}
@@ -312,8 +318,8 @@ export default function DashboardPage() {
         >
           <Card>
             <CardHeader>
-              <CardTitle>Soil Health Indicators</CardTitle>
-              <CardDescription>Current measurements vs. target ranges</CardDescription>
+              <CardTitle>{t("dashboard.soilHealthTitle")}</CardTitle>
+              <CardDescription>{t("dashboard.soilHealthDesc")}</CardDescription>
             </CardHeader>
             <CardContent className="h-[180px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -330,8 +336,8 @@ export default function DashboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Crop Distribution</CardTitle>
-              <CardDescription>Percentage of land usage by crop type</CardDescription>
+              <CardTitle>{t("dashboard.cropDistTitle")}</CardTitle>
+              <CardDescription>{t("dashboard.cropDistDesc")}</CardDescription>
             </CardHeader>
             <CardContent className="h-[180px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -367,8 +373,8 @@ export default function DashboardPage() {
       >
         <Card>
           <CardHeader>
-            <CardTitle>Disease Detection History</CardTitle>
-            <CardDescription>Record of previous crop scans and detected diseases</CardDescription>
+            <CardTitle>{t("dashboard.historyTitle")}</CardTitle>
+            <CardDescription>{t("dashboard.historyDesc")}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col sm:flex-row gap-4 mb-4">
@@ -376,7 +382,7 @@ export default function DashboardPage() {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="text"
-                  placeholder="Search by crop or disease..."
+                  placeholder={t("dashboard.searchPlaceholder")}
                   className="pl-8"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -384,12 +390,12 @@ export default function DashboardPage() {
               </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Filter by status" />
+                  <SelectValue placeholder={t("dashboard.filterStatus")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="treated">Treated</SelectItem>
-                  <SelectItem value="monitoring">Monitoring</SelectItem>
+                  <SelectItem value="all">{t("dashboard.statusAll")}</SelectItem>
+                  <SelectItem value="treated">{t("dashboard.statusTreated")}</SelectItem>
+                  <SelectItem value="monitoring">{t("dashboard.statusMonitoring")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -412,7 +418,9 @@ export default function DashboardPage() {
                         </div>
                         <div>
                           <div className="font-medium">{scan.disease}</div>
-                          <div className="text-sm text-muted-foreground">{scan.confidence}% confidence</div>
+                          <div className="text-sm text-muted-foreground">
+                            {t("dashboard.confidence").replace("{n}", String(scan.confidence))}
+                          </div>
                         </div>
                         <div className="sm:text-right">
                           <div
@@ -425,12 +433,14 @@ export default function DashboardPage() {
                             ) : (
                               <AlertTriangle className="mr-1 h-3 w-3" />
                             )}
-                            {scan.status === "treated" ? "Treated" : "Monitoring"}
+                            {scan.status === "treated"
+                              ? t("dashboard.statusTreated")
+                              : t("dashboard.statusMonitoring")}
                           </div>
                         </div>
                       </div>
                       <Button variant="outline" size="sm">
-                        Details
+                        {t("dashboard.details")}
                       </Button>
                     </div>
                   ))
@@ -439,8 +449,8 @@ export default function DashboardPage() {
                     <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
                       <Search className="h-6 w-6 text-muted-foreground" />
                     </div>
-                    <h3 className="font-medium">No results found</h3>
-                    <p className="text-sm text-muted-foreground mt-1">Try adjusting your search terms or filters</p>
+                    <h3 className="font-medium">{t("dashboard.noResults")}</h3>
+                    <p className="text-sm text-muted-foreground mt-1">{t("dashboard.noResultsHint")}</p>
                   </div>
                 )}
               </div>
@@ -448,7 +458,7 @@ export default function DashboardPage() {
           </CardContent>
           <CardFooter className="border-t px-6 py-4">
             <Button variant="outline" className="w-full">
-              View Complete History
+              {t("dashboard.viewFullHistory")}
             </Button>
           </CardFooter>
         </Card>

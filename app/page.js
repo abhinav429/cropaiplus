@@ -1,12 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { ArrowRight, Sparkles, Leaf, Database, Smartphone, Award, Target, BarChart, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import LeafCursor from "@/components/LeafCursor"
+import { useLanguage } from "@/contexts/LanguageContext"
+
+const HOME_FEATURE_ICONS = [Leaf, Sparkles, Database, Smartphone, Target, BarChart, Shield]
 
 // Animated background component
 const AnimatedBackground = () => {
@@ -36,6 +39,7 @@ const AnimatedBackground = () => {
 
 export default function Home() {
   const [isVisible, setIsVisible] = useState(false)
+  const { t } = useLanguage()
 
   useEffect(() => {
     setIsVisible(true)
@@ -60,68 +64,27 @@ export default function Home() {
     },
   }
 
-  const features = [
-    {
-      icon: <Leaf className="h-10 w-10 text-primary" />,
-      title: "Disease Detection",
-      description:
-        "Instantly identify crop diseases from photos with 99% accuracy and receive targeted treatment plans.",
-    },
-    {
-      icon: <Sparkles className="h-10 w-10 text-primary" />,
-      title: "AI Assistant",
-      description: "Ask farming questions and get expert advice 24/7 with our AI-powered agricultural assistant.",
-    },
-    {
-      icon: <Database className="h-10 w-10 text-primary" />,
-      title: "Yield Analytics",
-      description: "Track and analyze your crop performance over time with detailed reports and insights.",
-    },
-    {
-      icon: <Smartphone className="h-10 w-10 text-primary" />,
-      title: "Mobile Access",
-      description: "Access all features on your smartphone in the field, even with limited connectivity.",
-    },
-    {
-      icon: <Target className="h-10 w-10 text-primary" />,
-      title: "Accurate Results",
-      description: "Get accurate results with our advanced ML model trained on millions of images.",
-    },
-    {
-      icon: <BarChart className="h-10 w-10 text-primary" />,
-      title: "AI Analysis",
-      description: "Our advanced AI algorithms analyze images to detect crop health issues and diseases.",
-    },
-    {
-      icon: <Shield className="h-10 w-10 text-primary" />,
-      title: "Early Detection",
-      description: "Identify potential problems before they become serious, saving time and resources.",
-    },
-  ]
+  const features = useMemo(() => {
+    const raw = t("home.features")
+    if (!Array.isArray(raw)) return []
+    return raw.map((item, index) => {
+      const Icon = HOME_FEATURE_ICONS[index] || Leaf
+      return {
+        icon: <Icon className="h-10 w-10 text-primary" />,
+        title: item.title,
+        description: item.description,
+      }
+    })
+  }, [t])
 
-  const testimonials = [
-    {
-      name: "John Smith",
-      role: "Wheat Farmer, Nebraska",
-      content:
-        "Crop AI detected stripe rust on my wheat before it became visible to the naked eye. Saved me thousands in potential losses.",
+  const testimonials = useMemo(() => {
+    const raw = t("home.testimonials")
+    if (!Array.isArray(raw)) return []
+    return raw.map((item) => ({
+      ...item,
       image: "/placeholder.svg?height=80&width=80",
-    },
-    {
-      name: "Maria Rodriguez",
-      role: "Vineyard Owner, California",
-      content:
-        "The AI assistant helped me optimize irrigation during last summer's drought. My yields were up 20% compared to neighboring farms.",
-      image: "/placeholder.svg?height=80&width=80",
-    },
-    {
-      name: "Ahmed Hassan",
-      role: "Rice Farmer, Egypt",
-      content:
-        "I've been farming for 30 years and Crop AI still taught me new techniques. The marketplace connects me directly to buyers for better prices.",
-      image: "/placeholder.svg?height=80&width=80",
-    },
-  ]
+    }))
+  }, [t])
 
   return (
     <div className="relative">
@@ -138,24 +101,25 @@ export default function Home() {
               className="space-y-4 relative z-10"
             >
               <div className="inline-block rounded-lg bg-muted px-3 py-1 text-sm">
-                Revolutionizing Agriculture with AI
+                {t("home.badge")}
               </div>
               <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl">
-                <span className="text-primary">AI-Powered</span> Crop Management for Smart Farming
+                <span className="text-primary">{t("home.titleHighlight")}</span>{" "}
+                {t("home.titleRest")}
               </h1>
               <p className="max-w-[600px] text-muted-foreground md:text-xl">
-                Detect diseases, get expert advice, and optimize your yield with Crop AI. The future of farming is here.
+                {t("home.subtitle")}
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link href="/detect">
                   <Button size="lg" className="gap-2">
-                    Try Now
+                    {t("home.tryNow")}
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
                 <Link href="/about">
                   <Button size="lg" variant="outline">
-                    Learn More
+                    {t("home.learnMore")}
                   </Button>
                 </Link>
               </div>
@@ -170,7 +134,7 @@ export default function Home() {
               <div className="relative h-[350px] w-full sm:h-[450px] md:h-[400x]">
                 <Image
                   src="/images/crop-field.jpg"
-                  alt="AI scanning crops in a field"
+                  alt={t("home.heroImageAlt")}
                   fill
                   className="object-cover rounded-xl"
                   priority
@@ -193,10 +157,10 @@ export default function Home() {
             className="text-center space-y-4 mb-12"
           >
             <motion.h2 variants={fadeIn} className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">
-              Key Features of Crop AI
+              {t("home.featuresHeading")}
             </motion.h2>
             <motion.p variants={fadeIn} className="mx-auto max-w-[700px] text-muted-foreground md:text-xl">
-              Our AI-powered platform provides everything you need to maximize your crop yields
+              {t("home.featuresSub")}
             </motion.p>
           </motion.div>
 
@@ -234,10 +198,10 @@ export default function Home() {
             className="text-center space-y-4 mb-12"
           >
             <motion.h2 variants={fadeIn} className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">
-              Trusted by Farmers Worldwide
+              {t("home.testimonialsHeading")}
             </motion.h2>
             <motion.p variants={fadeIn} className="mx-auto max-w-[700px] text-muted-foreground md:text-xl">
-              See how Crop AI is transforming agriculture for farmers around the globe
+              {t("home.testimonialsSub")}
             </motion.p>
           </motion.div>
 
@@ -284,21 +248,21 @@ export default function Home() {
             <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-primary/20 blur-[100px]" />
             <div className="relative z-10">
               <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl mb-4">
-                Ready to Transform Your Farming?
+                {t("home.ctaTitle")}
               </h2>
               <p className="max-w-[600px] text-muted-foreground md:text-xl mb-8">
-                Join thousands of farmers already using Crop AI to increase yields, reduce costs, and farm smarter.
+                {t("home.ctaSub")}
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link href="/detect">
                   <Button size="lg" className="gap-2">
-                    Try Now
+                    {t("home.tryNow")}
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
                 <Link href="/about">
                   <Button size="lg" variant="outline">
-                    Learn More
+                    {t("home.learnMore")}
                   </Button>
                 </Link>
               </div>

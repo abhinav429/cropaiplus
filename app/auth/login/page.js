@@ -10,8 +10,10 @@ import { FiMail, FiLock, FiHome } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import { Leaf } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function Login() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -30,9 +32,9 @@ export default function Login() {
     } catch (error) {
       // Check for specific Firebase auth error codes
       if (error.code === 'auth/invalid-credential') {
-        setError('Incorrect email or password. Please try again.');
+        setError(t('auth.incorrectCredentials'));
       } else {
-        setError('An error occurred. Please try again.');
+        setError(t('auth.genericError'));
       }
     } finally {
       setIsLoading(false);
@@ -61,7 +63,7 @@ export default function Login() {
           <Link href="/">
             <Button variant="outline" className="bg-white text-emerald-600 hover:bg-emerald-50 border border-emerald-600 transition-all duration-300">
               <FiHome className="mr-2 h-4 w-4" />
-              Home
+              {t('auth.home')}
             </Button>
           </Link>
         </div>
@@ -70,7 +72,7 @@ export default function Login() {
         <span className="text-4xl font-bold text-center text-emerald-800">CropAI</span>
       </div>
       <div className="w-full max-w-md p-8 space-y-6 rounded-xl bg-white shadow-2xl relative z-10">
-        <h2 className="text-2xl font-bold text-center text-emerald-800 mb-6">Log In</h2>
+        <h2 className="text-2xl font-bold text-center text-emerald-800 mb-6">{t('auth.loginTitle')}</h2>
         {error && (
           <p className="text-red-500 text-center bg-red-100 p-2 rounded">
             {error}
@@ -79,7 +81,7 @@ export default function Login() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium text-emerald-700 flex items-center">
-              <FiMail className="mr-2" /> Email
+              <FiMail className="mr-2" /> {t('auth.email')}
             </label>
             <input
               type="email"
@@ -92,7 +94,7 @@ export default function Login() {
           </div>
           <div className="space-y-2">
             <label htmlFor="password" className="text-sm font-medium text-emerald-700 flex items-center">
-              <FiLock className="mr-2" /> Password
+              <FiLock className="mr-2" /> {t('auth.password')}
             </label>
             <input
               type="password"
@@ -104,13 +106,13 @@ export default function Login() {
             />
           </div>
           <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg transition duration-200 transform hover:scale-105" disabled={isLoading}>
-            {isLoading ? 'Logging In...' : 'Log In'}
+            {isLoading ? t('auth.loggingIn') : t('auth.loginTitle')}
           </Button>
         </form>
         <div className="text-sm text-center">
-          Don&apos;t have an account?{' '}
-          <Link href="/signup" className="text-emerald-600 hover:underline font-medium">
-            Sign up
+          {t('auth.dontHaveAccount')}{' '}
+          <Link href="/auth/signup" className="text-emerald-600 hover:underline font-medium">
+            {t('auth.signupLink')}
           </Link>
         </div>
       </div>
