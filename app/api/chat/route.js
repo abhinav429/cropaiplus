@@ -94,6 +94,7 @@ export async function POST(request) {
       body: JSON.stringify({
         model: "qwen/qwen3-vl-235b-a22b-thinking",
         messages: openRouterMessages,
+        max_tokens: 500,
       }),
     })
 
