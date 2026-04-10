@@ -1,5 +1,6 @@
 import { buildAgribotSystemPrompt } from "@/lib/agribot-prompt"
 import { retrieveKnowledgeContext } from "@/lib/knowledge/retrieve"
+import { logger } from "@/lib/logger"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -42,6 +43,28 @@ function buildCaseContextSystemAddendum(caseContext) {
     `- Treatment hints already shown to the farmer: ${treatments || "none listed"}`,
     "Give actionable next steps for this case. If model confidence is low or the farmer asks, recommend confirming with a local extension officer or agronomist and/or submitting a clearer leaf photo.",
   ].join("\n")
+}
+
+/**
+ * Optional live ESP32 readings (DHT11, soil moisture, air quality, light) from GET /sensor
+ * or session handoff — merged into system prompt so AgriBot can reason about microclimate.
+ */
+function buildSensorContextSystemAddendum(sensorContext) {
+  if (!sensorContext || typeof sensorContext !== "object") return ""
+  const s = sensorContext
+  const lines = [
+    "LIVE FIELD SENSOR READINGS (ESP32 — use to tailor irrigation, ventilation, and crop stress advice; these are point-in-time measurements, not a forecast):",
+  ]
+  if (typeof s.temperature === "number") lines.push(`- Air temperature (DHT11): ${s.temperature} °C`)
+  if (typeof s.humidity === "number") lines.push(`- Relative humidity (DHT11): ${s.humidity}%`)
+  if (typeof s.soil === "number") lines.push(`- Soil moisture (analog sensor): ${s.soil} (scale depends on device calibration)`)
+  if (typeof s.light === "number") lines.push(`- Light intensity (sensor): ${s.light} (0/1 or raw per firmware)`)
+  if (typeof s.gas === "number") lines.push(`- Air quality / gas (MQ-class): ${s.gas} (0/1 or threshold per firmware)`)
+  if (typeof s.timestamp === "string") lines.push(`- Sample time (ISO): ${s.timestamp}`)
+  lines.push(
+    "If readings conflict with farm profile or disease case context, mention uncertainty and suggest confirming with local observation or extension advice."
+  )
+  return lines.length > 2 ? lines.join("\n") : ""
 }
 
 /** Optional farmer context from /farm-profile (localStorage → client → API). */
@@ -103,6 +126,7 @@ async function* streamOpenRouterDeltas(body) {
  *   messages: { role: 'user'|'assistant', content: string }[],
  *   caseContext?: object,
  *   farmProfile?: object,
+ *   sensorContext?: object,
  * }
  * Response: streamed plain text (UTF-8) chunks from the model.
  *
@@ -135,17 +159,27 @@ export async function POST(request) {
 
   const caseContext = body.caseContext
   const farmProfile = body.farmProfile
+  const sensorContext = body.sensorContext
 
-  const knowledgeExcerpt = await retrieveKnowledgeContext(messages)
+  /** Same optional payloads as system addenda — improves keyword retrieval against `knowledge/pages`. */
+  const knowledgeExcerpt = await retrieveKnowledgeContext(messages, {
+    caseContext,
+    farmProfile,
+    sensorContext,
+  })
   let systemPrompt = buildAgribotSystemPrompt(knowledgeExcerpt)
 
   const caseAddendum = buildCaseContextSystemAddendum(caseContext)
   const farmAddendum = buildFarmProfileSystemAddendum(farmProfile)
+  const sensorAddendum = buildSensorContextSystemAddendum(sensorContext)
   if (caseAddendum) {
     systemPrompt = `${systemPrompt}\n\n---\n${caseAddendum}`
   }
   if (farmAddendum) {
     systemPrompt = `${systemPrompt}\n\n---\n${farmAddendum}`
+  }
+  if (sensorAddendum) {
+    systemPrompt = `${systemPrompt}\n\n---\n${sensorAddendum}`
   }
 
   const model = process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL
@@ -169,16 +203,30 @@ export async function POST(request) {
   })
 
   if (!upstream.ok) {
+    const raw = await upstream.text()
     let detail = upstream.statusText
     try {
-      const errJson = await upstream.json()
+      const errJson = JSON.parse(raw)
       if (errJson.error?.message) detail = errJson.error.message
       else if (typeof errJson.error === "string") detail = errJson.error
+      else if (errJson.message) detail = errJson.message
     } catch {
-      /* ignore */
+      if (raw?.trim()) detail = raw.slice(0, 500)
     }
-    console.error("OpenRouter error:", upstream.status, detail)
-    return Response.json({ error: detail || "Upstream model error." }, { status: 502 })
+    /** 402 = OpenRouter billing / credits; 429 = rate limit — see https://openrouter.ai/docs/errors */
+    logger.error(
+      "[/api/chat] OpenRouter error:",
+      upstream.status,
+      detail,
+      upstream.status === 402 ? "(add credits at openrouter.ai or set OPENROUTER_MODEL to an available model)" : ""
+    )
+    return Response.json(
+      {
+        error: detail || "Upstream model error.",
+        status: upstream.status,
+      },
+      { status: 502 }
+    )
   }
 
   const encoder = new TextEncoder()

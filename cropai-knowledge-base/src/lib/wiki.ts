@@ -1,0 +1,426 @@
+import fs from "fs/promises";
+import path from "path";
+import type { WikiPage, IndexEntry } from "./types";
+import { callLLM, hasLLMKey } from "./llm";
+
+// ---------------------------------------------------------------------------
+// Configurable base directories — override via env vars for testing
+// ---------------------------------------------------------------------------
+
+export function getWikiDir(): string {
+  return process.env.WIKI_DIR ?? path.join(process.cwd(), "wiki");
+}
+
+export function getRawDir(): string {
+  return process.env.RAW_DIR ?? path.join(process.cwd(), "raw");
+}
+
+// ---------------------------------------------------------------------------
+// Slug validation — path traversal protection
+// ---------------------------------------------------------------------------
+
+/** Safe slug pattern: lowercase alphanumeric, may contain hyphens, cannot start/end with hyphen. */
+const SAFE_SLUG_RE = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
+
+/**
+ * Validate that a slug is safe to use as a filename inside the wiki/raw dirs.
+ *
+ * Rejects empty strings, path traversal attempts (`..`, `/`, `\`), null bytes,
+ * and anything that doesn't match the safe pattern.
+ *
+ * @throws {Error} with a descriptive message when the slug is invalid.
+ */
+export function validateSlug(slug: string): void {
+  if (typeof slug !== "string" || slug.trim().length === 0) {
+    throw new Error("Invalid slug: must be a non-empty string");
+  }
+  if (slug.includes("\0")) {
+    throw new Error("Invalid slug: must not contain null bytes");
+  }
+  if (slug.includes("/") || slug.includes("\\")) {
+    throw new Error("Invalid slug: must not contain path separators");
+  }
+  if (slug.includes("..")) {
+    throw new Error("Invalid slug: must not contain path traversal (..)")
+  }
+  if (!SAFE_SLUG_RE.test(slug)) {
+    throw new Error(
+      `Invalid slug: "${slug}" does not match the safe pattern (lowercase alphanumeric and hyphens, cannot start or end with hyphen)`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Directory helpers
+// ---------------------------------------------------------------------------
+
+/** Create the `raw/` and `wiki/` directories if they don't already exist. */
+export async function ensureDirectories(): Promise<void> {
+  await fs.mkdir(getWikiDir(), { recursive: true });
+  await fs.mkdir(getRawDir(), { recursive: true });
+}
+
+// Re-export frontmatter utilities for backward compatibility
+export { parseFrontmatter, serializeFrontmatter } from "./frontmatter";
+export type { Frontmatter, ParsedPage } from "./frontmatter";
+
+// Import frontmatter utilities for local use within this module
+import { parseFrontmatter } from "./frontmatter";
+import type { Frontmatter } from "./frontmatter";
+
+// ---------------------------------------------------------------------------
+// Wiki page I/O
+// ---------------------------------------------------------------------------
+
+/** Read a wiki page by slug. Returns `null` when the file doesn't exist or the slug is invalid. */
+export async function readWikiPage(slug: string): Promise<WikiPage | null> {
+  try {
+    validateSlug(slug);
+  } catch {
+    return null;
+  }
+  const filePath = path.join(getWikiDir(), `${slug}.md`);
+  try {
+    const content = await fs.readFile(filePath, "utf-8");
+    // Derive title from the first markdown heading, falling back to the slug.
+    const titleMatch = content.match(/^#\s+(.+)$/m);
+    const title = titleMatch ? titleMatch[1].trim() : slug;
+    return { slug, title, content, path: filePath };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extended read that additionally exposes parsed frontmatter and the
+ * body (markdown with the YAML block stripped).
+ *
+ * This is a separate export so that {@link WikiPage} in `types.ts` stays
+ * unchanged and existing call sites continue to work without modification.
+ * Callers that specifically need the frontmatter — currently only
+ * `ingest()`'s re-ingest path — use this helper.
+ *
+ * Returns `null` when the page doesn't exist or the slug is invalid.
+ * Throws when the file exists but its frontmatter block is malformed.
+ */
+export async function readWikiPageWithFrontmatter(
+  slug: string,
+): Promise<(WikiPage & { frontmatter: Frontmatter; body: string }) | null> {
+  const page = await readWikiPage(slug);
+  if (!page) return null;
+  const { data, body } = parseFrontmatter(page.content);
+  // Prefer the H1 inside the body so frontmatter lines can never contribute
+  // to the derived title.
+  const titleMatch = body.match(/^#\s+(.+)$/m);
+  const title = titleMatch ? titleMatch[1].trim() : page.title;
+  return { ...page, title, frontmatter: data, body };
+}
+
+/** Write (or overwrite) a wiki page. Ensures the wiki directory exists first. Throws on invalid slug. */
+export async function writeWikiPage(
+  slug: string,
+  content: string,
+): Promise<void> {
+  validateSlug(slug);
+  await ensureDirectories();
+  const filePath = path.join(getWikiDir(), `${slug}.md`);
+  await fs.writeFile(filePath, content, "utf-8");
+}
+
+// ---------------------------------------------------------------------------
+// Index management
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse `wiki/index.md` and return its entries.
+ * Returns an empty array when the file doesn't exist.
+ *
+ * Expected format per line:
+ *   - [Title](slug.md) — summary
+ */
+export async function listWikiPages(): Promise<IndexEntry[]> {
+  const indexPath = path.join(getWikiDir(), "index.md");
+  let raw: string;
+  try {
+    raw = await fs.readFile(indexPath, "utf-8");
+  } catch {
+    return [];
+  }
+
+  const baseEntries: IndexEntry[] = [];
+  const lineRe = /^-\s+\[(.+?)]\((.+?)\.md\)\s*—\s*(.+)$/;
+
+  for (const line of raw.split("\n")) {
+    const m = line.match(lineRe);
+    if (m) {
+      baseEntries.push({ title: m[1], slug: m[2], summary: m[3].trim() });
+    }
+  }
+
+  // Enrich every entry in parallel with frontmatter-derived metadata
+  // (tags / updated / source_count). If any individual page fails to
+  // parse, we log a warning and fall back to the plain entry so that
+  // one malformed page never breaks the whole index.
+  const enriched = await Promise.all(
+    baseEntries.map(async (entry): Promise<IndexEntry> => {
+      try {
+        const page = await readWikiPageWithFrontmatter(entry.slug);
+        if (!page) return entry;
+        const fm = page.frontmatter;
+
+        const tags =
+          Array.isArray(fm.tags)
+            ? fm.tags.filter((t): t is string => typeof t === "string" && t.length > 0)
+            : undefined;
+
+        const updated =
+          typeof fm.updated === "string" && fm.updated.length > 0
+            ? fm.updated
+            : undefined;
+
+        // source_count is persisted as a string (see ingest.ts); parse defensively.
+        const sourceCountRaw = fm.source_count;
+        const sourceCountNum =
+          typeof sourceCountRaw === "string" && sourceCountRaw.length > 0
+            ? Number.parseInt(sourceCountRaw, 10)
+            : NaN;
+        const sourceCount = Number.isFinite(sourceCountNum) && sourceCountNum >= 0
+          ? sourceCountNum
+          : undefined;
+
+        return {
+          ...entry,
+          ...(tags && tags.length > 0 ? { tags } : {}),
+          ...(updated ? { updated } : {}),
+          ...(sourceCount !== undefined ? { sourceCount } : {}),
+        };
+      } catch (err) {
+        console.warn(
+          `listWikiPages: failed to read frontmatter for "${entry.slug}" — falling back to plain entry`,
+          err,
+        );
+        return entry;
+      }
+    }),
+  );
+
+  return enriched;
+}
+
+/**
+ * Write `wiki/index.md` from an array of entries.
+ *
+ * Format:
+ * ```
+ * # Wiki Index
+ *
+ * - [Title](slug.md) — summary
+ * ```
+ */
+export async function updateIndex(entries: IndexEntry[]): Promise<void> {
+  await ensureDirectories();
+  const lines = entries.map(
+    (e) => `- [${e.title}](${e.slug}.md) — ${e.summary}`,
+  );
+  const content = `# Wiki Index\n\n${lines.join("\n")}\n`;
+  const indexPath = path.join(getWikiDir(), "index.md");
+  await fs.writeFile(indexPath, content, "utf-8");
+}
+
+// Re-export raw source utilities for backward compatibility
+export { saveRawSource, listRawSources, readRawSource } from "./raw";
+export type { RawSource, RawSourceWithContent } from "./raw";
+
+// ---------------------------------------------------------------------------
+// Append-only log
+// ---------------------------------------------------------------------------
+
+/** Allowed operation kinds for log entries. */
+export type LogOperation =
+  | "ingest"
+  | "query"
+  | "lint"
+  | "save"
+  | "edit"
+  | "delete"
+  | "other";
+
+const ALLOWED_LOG_OPERATIONS: readonly LogOperation[] = [
+  "ingest",
+  "query",
+  "lint",
+  "save",
+  "edit",
+  "delete",
+  "other",
+];
+
+/**
+ * Append a structured entry to `wiki/log.md`, following the founding-spec format:
+ *
+ * ```
+ * ## [2026-04-07] ingest | Article Title
+ *
+ * <optional details line>
+ *
+ * ```
+ *
+ * Each entry is a markdown H2 heading, making the log both human-readable
+ * (renders as a list of section headings) and grep-friendly:
+ * `grep "^## \[" wiki/log.md | tail -5` returns the last 5 entries.
+ *
+ * @throws {Error} when `operation` is not one of the allowed values.
+ * @throws {Error} when `title` is empty (after trimming).
+ */
+export async function appendToLog(
+  operation: LogOperation,
+  title: string,
+  details?: string,
+): Promise<void> {
+  if (!ALLOWED_LOG_OPERATIONS.includes(operation)) {
+    throw new Error(
+      `Invalid log operation: "${operation}" (must be one of ${ALLOWED_LOG_OPERATIONS.join(", ")})`,
+    );
+  }
+  if (typeof title !== "string" || title.trim().length === 0) {
+    throw new Error("Invalid log title: must be a non-empty string");
+  }
+
+  await ensureDirectories();
+  const logPath = path.join(getWikiDir(), "log.md");
+  const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const heading = `## [${date}] ${operation} | ${title.trim()}`;
+
+  let block = `${heading}\n\n`;
+  if (details && details.trim().length > 0) {
+    block += `${details.trim()}\n\n`;
+  }
+  await fs.appendFile(logPath, block, "utf-8");
+}
+
+/** Read the contents of `wiki/log.md`. Returns `null` if the file doesn't exist. */
+export async function readLog(): Promise<string | null> {
+  const logPath = path.join(getWikiDir(), "log.md");
+  try {
+    return await fs.readFile(logPath, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cross-referencing helpers
+// ---------------------------------------------------------------------------
+
+const RELATED_PAGES_PROMPT = `Given this new wiki page and the existing wiki index, return a JSON array of slugs for pages that are related and should cross-reference this new page. Return at most 5 slugs. Return only the JSON array, nothing else.`;
+
+/**
+ * Identify existing wiki pages that are related to a newly written page.
+ *
+ * Sends the index entries + a summary of the new content to the LLM and asks
+ * it to return a JSON array of related slugs. Falls back to an empty array
+ * when there is no LLM key, no existing pages, or any error occurs.
+ */
+export async function findRelatedPages(
+  newSlug: string,
+  newContent: string,
+  existingEntries: IndexEntry[],
+): Promise<string[]> {
+  // Nothing to cross-reference when there's no LLM or no existing pages
+  if (!hasLLMKey() || existingEntries.length === 0) {
+    return [];
+  }
+
+  // Build a user message with the index and the new page's content
+  const indexList = existingEntries
+    .filter((e) => e.slug !== newSlug)
+    .map((e) => `- ${e.slug}: ${e.title} — ${e.summary}`)
+    .join("\n");
+
+  if (!indexList) {
+    return [];
+  }
+
+  const userMessage = `## New page (slug: ${newSlug})\n\n${newContent.slice(0, 2000)}\n\n## Existing wiki index\n\n${indexList}`;
+
+  try {
+    const response = await callLLM(RELATED_PAGES_PROMPT, userMessage);
+
+    // Extract JSON array from response — allow surrounding whitespace/text
+    const match = response.match(/\[[\s\S]*?\]/);
+    if (!match) return [];
+
+    const parsed: unknown = JSON.parse(match[0]);
+    if (!Array.isArray(parsed)) return [];
+
+    // Validate: only keep slugs that actually exist in the index (and aren't the new page)
+    const validSlugs = new Set(
+      existingEntries.filter((e) => e.slug !== newSlug).map((e) => e.slug),
+    );
+    return parsed
+      .filter((s): s is string => typeof s === "string" && validSlugs.has(s))
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Append cross-reference links to related wiki pages.
+ *
+ * For each related slug:
+ * - Reads the existing wiki page
+ * - Skips if it already contains a link to the new slug
+ * - Appends a "See also" link (or extends an existing "See also" section)
+ *
+ * Returns the slugs that were actually modified.
+ */
+export async function updateRelatedPages(
+  newSlug: string,
+  newTitle: string,
+  relatedSlugs: string[],
+): Promise<string[]> {
+  const updatedSlugs: string[] = [];
+
+  for (const slug of relatedSlugs) {
+    const page = await readWikiPage(slug);
+    if (!page) continue;
+
+    // Skip if already links to the new page
+    if (page.content.includes(`${newSlug}.md`)) continue;
+
+    const link = `[${newTitle}](${newSlug}.md)`;
+    let updatedContent: string;
+
+    // Check if there's already a "See also" section
+    const seeAlsoPattern = /^(\*\*See also:\*\*.*)$/m;
+    const seeAlsoMatch = page.content.match(seeAlsoPattern);
+
+    if (seeAlsoMatch) {
+      // Append to existing "See also" line
+      updatedContent = page.content.replace(
+        seeAlsoPattern,
+        `${seeAlsoMatch[1]}, ${link}`,
+      );
+    } else {
+      // Add a new "See also" section at the end
+      updatedContent = `${page.content.trimEnd()}\n\n**See also:** ${link}\n`;
+    }
+
+    await writeWikiPage(slug, updatedContent);
+    updatedSlugs.push(slug);
+  }
+
+  return updatedSlugs;
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle pipeline — re-exported from lifecycle.ts for backward compatibility
+// ---------------------------------------------------------------------------
+
+export { writeWikiPageWithSideEffects, deleteWikiPage } from "./lifecycle";
+export type {
+  WritePageOptions,
+  WritePageResult,
+  DeletePageResult,
+} from "./lifecycle";

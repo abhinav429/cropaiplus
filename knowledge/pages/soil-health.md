@@ -1,3 +1,9 @@
+---
+crops: [general]
+topics: [soil, nutrients]
+risk: advisory
+---
+
 # Soil health basics
 
 Foundational notes on soil properties relevant to many crops. Always validate with local soil tests.

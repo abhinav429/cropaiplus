@@ -23,11 +23,8 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  experimental: {
-    webpackBuildWorker: true,
-    parallelServerBuildTraces: true,
-    parallelServerCompiles: true,
-  },
+  // Avoid parallel webpack workers / parallel compiles: they can race the dev disk cache and
+  // produce ENOENT on .pack.gz plus 404 on /_next/static/* while HTML still returns 200.
 }
 
 mergeConfig(nextConfig, userConfig)

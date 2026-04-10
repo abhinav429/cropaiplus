@@ -1,3 +1,9 @@
+---
+crops: [general]
+topics: [irrigation, scouting]
+risk: advisory
+---
+
 # General crop care
 
 CropAI guidance for day-to-day crop management. Use with local extension advice and field conditions.

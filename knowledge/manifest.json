@@ -1,0 +1,10 @@
+{
+  "packId": "cropai-knowledge",
+  "version": "1.0.0",
+  "effectiveFrom": "2026-01-01",
+  "packChecksum": "",
+  "pages": {
+    "crop-care": { "version": "1.0.0", "sha256": "" },
+    "soil-health": { "version": "1.0.0", "sha256": "" }
+  }
+}

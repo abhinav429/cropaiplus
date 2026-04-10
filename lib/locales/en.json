@@ -12,7 +12,9 @@
     "login": "Login",
     "signUp": "Sign Up",
     "language": "Language",
-    "farmProfile": "Farm profile"
+    "farmProfile": "Farm profile",
+    "liveSensor": "Live sensor",
+    "dashboard": "Dashboard"
   },
   "footer": {
     "tagline": "Empowering farmers with AI-driven insights to improve crop yield, detect diseases early, and optimize farming practices.",
@@ -150,7 +152,8 @@
     "gas": "Gas / Air Quality",
     "gasClear": "Clear (1)",
     "gasDetected": "Detected (0)",
-    "gasSubtitle": "MQ Sensor state"
+    "gasSubtitle": "MQ Sensor state",
+    "openAgriBot": "Open AgriBot with these readings"
   },
   "chat": {
     "title": "AI Agricultural Assistant",
@@ -161,6 +164,16 @@
     "caseClear": "Clear case",
     "caseHint": "AgriBot will use this detection summary to tailor replies.",
     "farmProfileBannerTitle": "Using your saved farm profile",
+    "sensorRegionLabel": "Live sensor context for AgriBot",
+    "sensorIncludeLabel": "Include ESP32 live readings in replies",
+    "sensorHint": "When enabled, each message sends the latest data from GET /sensor (DHT11, soil, air, light), or your last snapshot from the Live sensor page.",
+    "sensorRefresh": "Refresh readings",
+    "sensorClear": "Clear snapshot",
+    "sensorOpenLive": "Live sensor page",
+    "sensorNoDataTitle": "No sensor data",
+    "sensorNoDataBody": "POST data from your ESP32 to /sensor or open the Live sensor page when the bridge is running.",
+    "sensorRefreshedTitle": "Readings updated",
+    "sensorRefreshedBody": "Latest values will be sent with your next message.",
     "clearConversation": "Clear conversation",
     "persistHint": "This chat is remembered on this browser until you clear it or use private mode.",
     "placeholder": "Ask a farming question...",
