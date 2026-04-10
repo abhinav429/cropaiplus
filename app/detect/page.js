@@ -10,10 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
 import axios from "axios";
-
-/** Base URL for FastAPI disease model; from ML_API_URL (see next.config.mjs → NEXT_PUBLIC_ML_API_URL). */
-const getMlApiBase = () =>
-  process.env.NEXT_PUBLIC_ML_API_URL || "http://127.0.0.1:8000";
+import { useLanguage } from "@/contexts/LanguageContext";
+import Link from "next/link";
+import { MessageSquareText } from "lucide-react";
+import { writeDetectCase, clearDetectCase } from "@/lib/detectCase";
 
 const diseaseCures = {
   "bird eye spot in tea": {
@@ -53,6 +53,7 @@ const diseaseCures = {
 };
 
 export default function DetectionPage() {
+  const { t, locale } = useLanguage();
   const [image, setImage] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [detectionResult, setDetectionResult] = useState(null);
@@ -73,8 +74,8 @@ export default function DetectionPage() {
       sendImageToAPI(file);
     } else {
       toast({
-        title: "Upload Error",
-        description: "Please select a valid image file.",
+        title: t("detect.uploadErrorTitle"),
+        description: t("detect.uploadErrorBody"),
       });
     }
   };
@@ -119,31 +120,49 @@ export default function DetectionPage() {
     formData.append('image', imageFile);
 
     try {
-      const response = await axios.post(`${getMlApiBase().replace(/\/$/, "")}/predict_tea_disease`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      // Same-origin proxy → /api/predict-tea → CropAPI (ML_API_URL on server; avoids browser CORS)
+      const response = await axios.post("/api/predict-tea", formData);
 
       console.log('API Response:', response.data);
       setPredictionResult(response.data);
+      const displayConf = Math.min(response.data.confidence_score * 100 + 50, 96);
+      const treatmentList = diseaseCures[response.data.predicted_class]?.treatment ?? [];
       setDetectionResult({
         diseaseName: response.data.predicted_class,
-        confidence: Math.min(response.data.confidence_score * 100 + 50, 96),
-        description: diseaseCures[response.data.predicted_class]?.treatment.join(", ") || "No description available.",
-        symptoms: ["Symptoms not available"],
-        treatments: diseaseCures[response.data.predicted_class]?.treatment.map((treatment, index) => ({
-          name: `Treatment ${index + 1}`,
+        confidence: displayConf,
+        description: treatmentList.join(", ") || t("detect.noDescription"),
+        symptoms: [t("detect.symptomsPlaceholder")],
+        treatments: treatmentList.map((treatment, index) => ({
+          name: `${t("detect.treatmentPrefix")} ${index + 1}`,
           description: treatment,
           effectiveness: 85,
-          application: "Apply as directed.",
-        })) || [],
+          application: t("detect.applyAsDirected"),
+        })),
         riskLevel: "High",
         impactOnYield: "Can cause significant crop loss if untreated",
       });
+      // Persist for AgriBot case handoff (session-only; see lib/detectCase.js)
+      writeDetectCase({
+        disease: response.data.predicted_class,
+        displayConfidence: displayConf,
+        rawModelConfidence: response.data.confidence_score,
+        capturedAt: new Date().toISOString(),
+        locale,
+        treatmentSummaries: treatmentList.slice(0, 6),
+      });
     } catch (error) {
       console.error('Error sending image to API:', error);
+      const status = error.response?.status;
+      const data = error.response?.data;
+      const unreachable =
+        status === 503 ||
+        data?.error === "ML_SERVICE_UNREACHABLE" ||
+        error.code === "ERR_NETWORK" ||
+        error.message === "Network Error";
+
       toast({
-        title: "Analysis Error",
-        description: "Failed to analyze the image. Please try again.",
+        title: unreachable ? t("detect.mlUnavailableTitle") : t("detect.analysisErrorTitle"),
+        description: unreachable ? t("detect.mlUnavailableBody") : t("detect.analysisErrorBody"),
       });
     } finally {
       setAnalyzing(false);
@@ -161,6 +180,7 @@ export default function DetectionPage() {
   const clearImage = () => {
     setImage(null);
     setDetectionResult(null);
+    clearDetectCase();
   };
 
   return (
@@ -171,9 +191,9 @@ export default function DetectionPage() {
         transition={{ duration: 0.5 }}
         className="space-y-4 text-center mb-10"
       >
-        <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl">Crop Disease Detection</h1>
+        <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl">{t("detect.title")}</h1>
         <p className="mx-auto max-w-[700px] text-muted-foreground md:text-xl">
-          Upload an image of your crops and our AI will identify diseases and provide treatment recommendations
+          {t("detect.subtitle")}
         </p>
       </motion.div>
 
@@ -186,8 +206,8 @@ export default function DetectionPage() {
         >
           <Tabs defaultValue="upload" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="upload">Upload Image</TabsTrigger>
-              <TabsTrigger value="camera">Camera Capture</TabsTrigger>
+              <TabsTrigger value="upload">{t("detect.uploadTab")}</TabsTrigger>
+              <TabsTrigger value="camera">{t("detect.cameraTab")}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="upload" className="space-y-4">
@@ -209,14 +229,14 @@ export default function DetectionPage() {
                     <div className="flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/20 rounded-lg p-10 h-[300px]">
                       <Upload className="h-10 w-10 text-muted-foreground mb-4" />
                       <p className="text-center text-muted-foreground mb-4">
-                        Drag and drop your image here or click to browse
+                        {t("detect.dropHint")}
                       </p>
                       <label htmlFor="image-upload" className="cursor-pointer">
                         <Button onClick={(e) => { 
                             e.preventDefault(); 
                             document.getElementById('image-upload').click(); 
                         }}>
-                            Choose Image
+                            {t("detect.chooseImage")}
                         </Button>
                         <input
                           id="image-upload"
@@ -232,16 +252,16 @@ export default function DetectionPage() {
                 </CardContent>
                 <CardFooter className="flex justify-between">
                   <Button variant="outline" onClick={clearImage} disabled={!image}>
-                    Clear
+                    {t("detect.clear")}
                   </Button>
                   <Button onClick={() => sendImageToAPI(image)} disabled={!image || analyzing}>
                     {analyzing ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Analyzing...
+                        {t("detect.analyzing")}
                       </>
                     ) : (
-                      "Analyze Image"
+                      t("detect.analyze")
                     )}
                   </Button>
                 </CardFooter>
@@ -249,9 +269,9 @@ export default function DetectionPage() {
 
               <Alert>
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Tip</AlertTitle>
+                <AlertTitle>{t("detect.tipTitle")}</AlertTitle>
                 <AlertDescription>
-                  For best results, ensure good lighting and focus on the affected area of the plant.
+                  {t("detect.tipBody")}
                 </AlertDescription>
               </Alert>
             </TabsContent>
@@ -261,13 +281,13 @@ export default function DetectionPage() {
                 <CardContent className="p-6">
                   <div className="flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/20 rounded-lg p-4 h-[300px]">
                     <Camera className="h-10 w-10 text-muted-foreground mb-4" />
-                    <p className="text-center text-muted-foreground mb-4">Click below to access your camera</p>
+                    <p className="text-center text-muted-foreground mb-4">{t("detect.cameraHint")}</p>
                     <video className="w-full h-[200px] object-cover mb-4" autoPlay muted></video>
                     <div className="flex space-x-4">
                       {!isCameraActive ? (
-                        <Button onClick={startCamera} className="w">Start Camera</Button>
+                        <Button onClick={startCamera} className="w">{t("detect.startCamera")}</Button>
                       ) : (
-                        <Button onClick={handleCameraCapture} className="w">Capture Photo</Button>
+                        <Button onClick={handleCameraCapture} className="w">{t("detect.capturePhoto")}</Button>
                       )}
                     </div>
                   </div>
@@ -293,19 +313,19 @@ export default function DetectionPage() {
                   </div>
                   <div className="text-right">
                     <span className="inline-flex items-center rounded-full bg-primary/20 px-2.5 py-0.5 text-sm font-medium text-primary">
-                      {detectionResult.confidence.toFixed(1)}% Confidence
+                      {detectionResult.confidence.toFixed(1)}% {t("detect.confidence")}
                     </span>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold mb-2">Description</h3>
+                  <h3 className="text-lg font-semibold mb-2">{t("detect.description")}</h3>
                   <p className="text-muted-foreground">{detectionResult.description}</p>
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold mb-2">Symptoms</h3>
+                  <h3 className="text-lg font-semibold mb-2">{t("detect.symptoms")}</h3>
                   <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
                     {detectionResult.symptoms.map((symptom, index) => (
                       <li key={index}>{symptom}</li>
@@ -314,14 +334,14 @@ export default function DetectionPage() {
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold mb-2">Recommended Treatments</h3>
+                  <h3 className="text-lg font-semibold mb-2">{t("detect.treatments")}</h3>
                   <div className="space-y-4">
                     {detectionResult.treatments.map((treatment, index) => (
                       <div key={index} className="p-4 rounded-lg bg-muted">
                         <div className="flex justify-between mb-2">
                           <span className="font-medium">{treatment.name}</span>
                           <span className="inline-flex items-center rounded-full bg-primary/20 px-2.5 py-0.5 text-xs font-medium text-primary">
-                            {treatment.effectiveness}% Effective
+                            {treatment.effectiveness}% {t("detect.effective")}
                           </span>
                         </div>
                         <p className="text-sm text-muted-foreground mb-2">{treatment.description}</p>
@@ -336,9 +356,18 @@ export default function DetectionPage() {
                   </div>
                 </div>
               </CardContent>
+              {/* Hand off structured diagnosis context to AgriBot (no image re-upload) */}
+              <div className="px-6 pb-2">
+                <Button asChild className="w-full gap-2" variant="default">
+                  <Link href="/chat?from=detect">
+                    <MessageSquareText className="h-4 w-4 shrink-0" />
+                    {t("detect.askAgriBot")}
+                  </Link>
+                </Button>
+              </div>
               <CardFooter className="bg-muted/50 rounded-b-lg flex justify-between items-center">
                 <div>
-                  <span className="font-medium">Risk Level: </span>
+                  <span className="font-medium">{t("detect.riskLevel")}: </span>
                   <span className="text-destructive font-medium">{detectionResult.riskLevel}</span>
                 </div>
                 <div>
@@ -352,10 +381,9 @@ export default function DetectionPage() {
                 <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
                   <AlertCircle className="h-10 w-10 text-primary" />
                 </div>
-                <h3 className="text-2xl font-bold">No Detection Results Yet</h3>
+                <h3 className="text-2xl font-bold">{t("detect.noResultsTitle")}</h3>
                 <p className="text-muted-foreground">
-                  Upload or capture an image of your crops and click "Analyze Image" to get disease detection results
-                  and treatment recommendations.
+                  {t("detect.noResultsBody")}
                 </p>
               </div>
             </div>

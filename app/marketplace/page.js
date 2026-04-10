@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/components/ui/use-toast"
 import { useCart } from "./CartContext"
+import { useLanguage } from "@/contexts/LanguageContext"
+import { formatCategoryLabel } from "@/lib/marketplaceCats"
 
 // Sample product data
 const sampleProducts = [
@@ -142,7 +144,16 @@ const categories = [
   "Education",
 ]
 
+const SORT_KEYS = {
+  featured: "sortFeatured",
+  "price-asc": "sortPriceAsc",
+  "price-desc": "sortPriceDesc",
+  rating: "sortRating",
+  newest: "sortNewest",
+}
+
 export default function MarketplacePage() {
+  const { t } = useLanguage()
   const [products, setProducts] = useState(sampleProducts)
   const [filteredProducts, setFilteredProducts] = useState(sampleProducts)
   const [searchQuery, setSearchQuery] = useState("")
@@ -210,9 +221,9 @@ export default function MarketplacePage() {
         transition={{ duration: 0.5 }}
         className="space-y-4 text-center mb-10"
       >
-        <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl">Agricultural Marketplace</h1>
+        <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl">{t("marketplace.title")}</h1>
         <p className="mx-auto max-w-[700px] text-muted-foreground md:text-xl">
-          Quality products for your farm with AI-powered recommendations
+          {t("marketplace.subtitle")}
         </p>
       </motion.div>
 
@@ -224,7 +235,7 @@ export default function MarketplacePage() {
               <Search className="absolute left-2.5 top-2.5 h-5 w-5 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Search products..."
+                placeholder={t("marketplace.searchPlaceholder")}
                 className="pl-10"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -236,11 +247,11 @@ export default function MarketplacePage() {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="gap-2">
                 <Filter className="h-4 w-4" />
-                Category: {selectedCategory}
+                {t("marketplace.categoryButton")}: {formatCategoryLabel(t, selectedCategory)}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56">
-              <DropdownMenuLabel>Product Categories</DropdownMenuLabel>
+              <DropdownMenuLabel>{t("marketplace.categoryMenuTitle")}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {categories.map((category) => (
                 <DropdownMenuCheckboxItem
@@ -248,7 +259,7 @@ export default function MarketplacePage() {
                   checked={selectedCategory === category}
                   onCheckedChange={() => setSelectedCategory(category)}
                 >
-                  {category}
+                  {formatCategoryLabel(t, category)}
                 </DropdownMenuCheckboxItem>
               ))}
             </DropdownMenuContent>
@@ -258,41 +269,41 @@ export default function MarketplacePage() {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="gap-2">
                 <ArrowUpDown className="h-4 w-4" />
-                Sort By
+                {t("marketplace.sortBy")}: {t(`marketplace.${SORT_KEYS[sortOption]}`)}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuLabel>Sort Options</DropdownMenuLabel>
+              <DropdownMenuLabel>{t("marketplace.sortMenuTitle")}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuCheckboxItem
                 checked={sortOption === "featured"}
                 onCheckedChange={() => setSortOption("featured")}
               >
-                Featured
+                {t("marketplace.sortFeatured")}
               </DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem
                 checked={sortOption === "price-asc"}
                 onCheckedChange={() => setSortOption("price-asc")}
               >
-                Price: Low to High
+                {t("marketplace.sortPriceAsc")}
               </DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem
                 checked={sortOption === "price-desc"}
                 onCheckedChange={() => setSortOption("price-desc")}
               >
-                Price: High to Low
+                {t("marketplace.sortPriceDesc")}
               </DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem
                 checked={sortOption === "rating"}
                 onCheckedChange={() => setSortOption("rating")}
               >
-                Top Rated
+                {t("marketplace.sortRating")}
               </DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem
                 checked={sortOption === "newest"}
                 onCheckedChange={() => setSortOption("newest")}
               >
-                Newest
+                {t("marketplace.sortNewest")}
               </DropdownMenuCheckboxItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -303,14 +314,16 @@ export default function MarketplacePage() {
             onClick={() => setShowRecommended(!showRecommended)}
           >
             <Zap className="h-4 w-4" />
-            {showRecommended ? "All Products" : "AI Recommendations"}
+            {showRecommended ? t("marketplace.allProducts") : t("marketplace.aiRecommendations")}
           </Button>
         </div>
 
         <div className="py-4">
           <div className="flex justify-between mb-2">
             <span className="text-sm">
-              Price Range: ₹{priceRange[0]} - ₹{priceRange[1]}
+              {t("marketplace.priceRange")
+                .replace("{min}", String(priceRange[0]))
+                .replace("{max}", String(priceRange[1]))}
             </span>
           </div>
           <Slider value={priceRange} min={0} max={150} step={5} onValueChange={setPriceRange} className="w-full" />
@@ -336,21 +349,21 @@ export default function MarketplacePage() {
                     className="object-cover transition-transform group-hover:scale-105"
                   />
                   {product.originalPrice && (
-                    <Badge className="absolute top-2 right-2 bg-destructive text-destructive-foreground">Sale</Badge>
+                    <Badge className="absolute top-2 right-2 bg-destructive text-destructive-foreground">{t("marketplace.sale")}</Badge>
                   )}
                   {product.isRecommended && (
-                    <Badge className="absolute top-2 left-2 bg-primary text-primary-foreground">AI Recommended</Badge>
+                    <Badge className="absolute top-2 left-2 bg-primary text-primary-foreground">{t("marketplace.aiRecommended")}</Badge>
                   )}
                 </div>
                 <CardHeader className="p-4 pb-0">
-                  <div className="text-sm text-muted-foreground mb-1">{product.category}</div>
+                  <div className="text-sm text-muted-foreground mb-1">{formatCategoryLabel(t, product.category)}</div>
                   <CardTitle className="text-lg leading-tight">{product.name}</CardTitle>
                   <div className="flex items-center mt-1">
                     <div className="flex">
                       {[...Array(5)].map((_, i) => (
                         <Star
                           key={i}
-                          className={`h-4 w-4 ₹{
+                          className={`h-4 w-4 ${
                             i < Math.floor(product.rating) ? "text-yellow-400 fill-yellow-400" : "text-muted-foreground"
                           }`}
                         />
@@ -384,9 +397,11 @@ export default function MarketplacePage() {
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {product.stock <= 5 ? (
-                        <span className="text-amber-500">Only {product.stock} left</span>
+                        <span className="text-amber-500">
+                          {t("marketplace.onlyLeft").replace("{count}", String(product.stock))}
+                        </span>
                       ) : (
-                        <span>In stock</span>
+                        <span>{t("marketplace.inStock")}</span>
                       )}
                     </div>
                   </div>
@@ -402,8 +417,8 @@ export default function MarketplacePage() {
             <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
               <Search className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="text-lg font-semibold">No Products Found</h3>
-            <p className="text-muted-foreground mt-1">Try adjusting your search or filter criteria</p>
+            <h3 className="text-lg font-semibold">{t("marketplace.noProductsTitle")}</h3>
+            <p className="text-muted-foreground mt-1">{t("marketplace.noProductsSubtitle")}</p>
             <Button
               variant="outline"
               className="mt-4"
@@ -415,7 +430,7 @@ export default function MarketplacePage() {
                 setShowRecommended(false)
               }}
             >
-              Reset Filters
+              {t("marketplace.resetFilters")}
             </Button>
           </div>
         )}

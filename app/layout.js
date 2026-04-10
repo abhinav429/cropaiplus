@@ -5,6 +5,7 @@ import Footer from "@/components/footer"
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from '@/contexts/AuthContext';
 import { CartProvider } from "./marketplace/CartContext";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 import LeafCursor from "@/components/LeafCursor";
 
 const inter = Inter({ subsets: ["latin"] })
@@ -21,20 +22,18 @@ export default function RootLayout({ children }) {
       <body className={`${inter.className} min-h-screen bg-gradient-to-b from-background to-muted/40`}>
         <AuthProvider>
           <CartProvider>
-            <div className="relative flex min-h-screen flex-col">
-              <Navbar />
-              <main className="flex-1">{children}</main>
-              <Footer />
-              <Toaster />
-              <LeafCursor />
-            </div>
+            <LanguageProvider>
+              <div className="relative flex min-h-screen flex-col">
+                <Navbar />
+                <main className="flex-1">{children}</main>
+                <Footer />
+                <Toaster />
+                <LeafCursor />
+              </div>
+            </LanguageProvider>
           </CartProvider>
         </AuthProvider>
       </body>
     </html>
   )
 }
-
-
-
-import './globals.css'

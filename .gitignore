@@ -19,6 +19,7 @@ yarn-error.log*
 # env files
 .env*
 !.env.example
+!.env.local.example
 
 # vercel
 .vercel
@@ -26,3 +27,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python / ML (local only)
+CropAPI/.venv/
+**/__pycache__/
+*.py[cod]
+*.h5
