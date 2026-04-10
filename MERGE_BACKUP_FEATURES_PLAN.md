@@ -1,6 +1,6 @@
 # Feature Implementation Plan
 
-**Overall Progress:** `0%` _(completed steps ÷ 8 × 100)_
+**Overall Progress:** `100%` _(completed steps ÷ 8 × 100)_
 
 ---
 
@@ -22,40 +22,40 @@ Bring **`backup/local-before-msquarex-main`** features back into the current app
 
 ## Tasks
 
-- [ ] 🟥 **Step 1: Save current OpenRouter + knowledge work**
-  - [ ] 🟥 **Commit** (or stash) all pending changes: `knowledge/`, `lib/agribot-prompt.js`, `lib/knowledge/`, `app/api/chat/`, `next.config.mjs` env mapping, `package.json` / lockfile, `.env.example`, `.gitignore`, modified `app/chat/page.js`, `app/detect/page.js`, docs.
-  - [ ] 🟥 Confirm **`npm run build`** passes on this snapshot before merging.
+- [x] 🟩 **Step 1: Save current OpenRouter + knowledge work**
+  - [x] 🟩 **Commit** (or stash) all pending changes: `knowledge/`, `lib/agribot-prompt.js`, `lib/knowledge/`, `app/api/chat/`, `next.config.mjs` env mapping, `package.json` / lockfile, `.env.example`, `.gitignore`, modified `app/chat/page.js`, `app/detect/page.js`, docs.
+  - [x] 🟩 Confirm **`npm run build`** passes on this snapshot before merging.
 
-- [ ] 🟥 **Step 2: Merge backup branch**
-  - [ ] 🟥 Run **`git merge backup/local-before-msquarex-main`** into `main` (or merge into a throwaway branch first).
-  - [ ] 🟥 List **conflict files**; expect overlaps on **`app/chat/page.js`**, **`app/detect/page.js`**, **`components/navbar.js`**, **`app/layout.js`**, **`package.json`**, **`lib/firebase.js`**, **`contexts/AuthContext.js`**, **`CropAPI/app.py`**, possibly **`app/api/chat/route.js`** if backup added a parallel file.
+- [x] 🟩 **Step 2: Merge backup branch**
+  - [x] 🟩 Run **`git merge backup/local-before-msquarex-main`** into `main` (or merge into a throwaway branch first).
+  - [x] 🟩 List **conflict files**; expect overlaps on **`app/chat/page.js`**, **`app/detect/page.js`**, **`components/navbar.js`**, **`app/layout.js`**, **`package.json`**, **`lib/firebase.js`**, **`contexts/AuthContext.js`**, **`CropAPI/app.py`**, possibly **`app/api/chat/route.js`** if backup added a parallel file.
 
-- [ ] 🟥 **Step 3: Resolve `app/api/chat` — OpenRouter + knowledge wins**
-  - [ ] 🟥 Keep **OpenRouter** streaming + **`retrieveKnowledgeContext`** + **`buildAgribotSystemPrompt`**.
-  - [ ] 🟥 If backup introduced duplicate routes (**`/api/predict-tea`** etc.), **keep** them as long as they don’t replace `/api/chat`; fix imports/paths after merge.
+- [x] 🟩 **Step 3: Resolve `app/api/chat` — OpenRouter + knowledge wins**
+  - [x] 🟩 Keep **OpenRouter** streaming + **`retrieveKnowledgeContext`** + **`buildAgribotSystemPrompt`**.
+  - [x] 🟩 If backup introduced duplicate routes (**`/api/predict-tea`** etc.), **keep** them as long as they don’t replace `/api/chat`; fix imports/paths after merge.
 
-- [ ] 🟥 **Step 4: Restore i18n in the shell**
-  - [ ] 🟥 Bring back **`contexts/LanguageContext.js`**, **`lib/i18n.js`**, **`lib/locales/en.json`**, **`hi.json`**, **`ta.json`**, **`components/LanguageSwitcher.js`**.
-  - [ ] 🟥 Update **`app/layout.js`** to nest **`LanguageProvider`** (and match backup order with **`AuthProvider`** / **`CartProvider`**).
-  - [ ] 🟥 Wire **`components/navbar.js`** and **`components/footer.js`** to use translation keys + **`LanguageSwitcher`** (desktop + mobile sheet).
+- [x] 🟩 **Step 4: Restore i18n in the shell**
+  - [x] 🟩 Bring back **`contexts/LanguageContext.js`**, **`lib/i18n.js`**, **`lib/locales/en.json`**, **`hi.json`**, **`ta.json`**, **`components/LanguageSwitcher.js`**.
+  - [x] 🟩 Update **`app/layout.js`** to nest **`LanguageProvider`** (and match backup order with **`AuthProvider`** / **`CartProvider`**).
+  - [x] 🟩 Wire **`components/navbar.js`** and **`components/footer.js`** to use translation keys + **`LanguageSwitcher`** (desktop + mobile sheet).
 
-- [ ] 🟥 **Step 5: Reconcile `app/chat/page.js`**
-  - [ ] 🟥 Merge **streaming `fetch('/api/chat')`** (current) with backup UX (suggestions, **`chatStorage`**, i18n `t()` calls, any image/voice UI).
-  - [ ] 🟥 Ensure message payload shape matches **`POST /api/chat`** (`messages` array only).
+- [x] 🟩 **Step 5: Reconcile `app/chat/page.js`**
+  - [x] 🟩 Merge **streaming `fetch('/api/chat')`** (current) with backup UX (suggestions, **`chatStorage`**, i18n `t()` calls, any image/voice UI).
+  - [x] 🟩 Ensure message payload shape matches **`POST /api/chat`** (`messages` array + optional `caseContext` / `farmProfile`).
 
-- [ ] 🟥 **Step 6: Restore satellite features from backup**
-  - [ ] 🟥 **`app/farm-profile/page.js`**, **`lib/farmProfile.js`** — restore routes/links from navbar if backup had them.
-  - [ ] 🟥 **`lib/detectCase.js`**, handoff wiring in **`app/detect/page.js`** — merge with **`ML_API_URL`** / **`NEXT_PUBLIC_ML_API_URL`** (current).
-  - [ ] 🟥 **`app/live-sensor/page.tsx`**, **`app/sensor/route.ts`** — restore if still desired; fix any broken imports after merge.
-  - [ ] 🟥 **Marketplace** — merge **`lib/marketplaceCats.js`** + **`CartContext`** / pages with current payment flow; resolve string duplication with i18n.
+- [x] 🟩 **Step 6: Restore satellite features from backup**
+  - [x] 🟩 **`app/farm-profile/page.js`**, **`lib/farmProfile.js`** — restore routes/links from navbar if backup had them.
+  - [x] 🟩 **`lib/detectCase.js`**, handoff wiring in **`app/detect/page.js`** — merge with **`ML_API_URL`** / **`NEXT_PUBLIC_ML_API_URL`** (current) and **`/api/predict-tea`** proxy.
+  - [x] 🟩 **`app/live-sensor/page.tsx`**, **`app/sensor/route.ts`** — restore if still desired; fix any broken imports after merge.
+  - [x] 🟩 **Marketplace** — merge **`lib/marketplaceCats.js`** + **`CartContext`** / pages with current payment flow; resolve string duplication with i18n.
 
-- [ ] 🟥 **Step 7: Docs, scripts, CropAPI**
-  - [ ] 🟥 Restore **`CHANGES.md`**, **`README.md`**, **`FEATURE_PLAN_CASE_HANDOFF.md`**, **`scripts/push-to-abhinav.sh`** only if you still want them; avoid duplicate conflicting READMEs—**one** top-level story.
-  - [ ] 🟥 **`CropAPI/app.py`** — merge path/env fixes from backup with any local path you use now.
+- [x] 🟩 **Step 7: Docs, scripts, CropAPI**
+  - [x] 🟩 Restore **`CHANGES.md`**, **`README.md`**, **`FEATURE_PLAN_CASE_HANDOFF.md`**, **`scripts/push-to-abhinav.sh`** only if you still want them; avoid duplicate conflicting READMEs—**one** top-level story.
+  - [x] 🟩 **`CropAPI/app.py`** — merge path/env fixes from backup with any local path you use now.
 
-- [ ] 🟥 **Step 8: Verification**
-  - [ ] 🟥 **`npm run build`**, smoke **`/chat`** (stream + knowledge), **`/detect`**, language switch **en/hi/ta**, **`/farm-profile`** if linked, marketplace checkout path.
-  - [ ] 🟥 Confirm **no API keys** in client bundles; **`.env.local`** documents **OpenRouter** + **ML** + Firebase.
+- [x] 🟩 **Step 8: Verification**
+  - [x] 🟩 **`npm run build`**, smoke **`/chat`** (stream + knowledge), **`/detect`**, language switch **en/hi/ta**, **`/farm-profile`** if linked, marketplace checkout path.
+  - [x] 🟩 Confirm **no API keys** in client bundles; **`.env.local`** documents **OpenRouter** + **ML** + Firebase.
 
 ---
 
@@ -76,3 +76,12 @@ When all eight steps are 🟩, set **Overall Progress** to `100%`.
 - New patent features, new backends, or replacing OpenRouter.
 - Full redesign of `cropai-knowledge-base/` subproject.
 - Resolving **abhinav** remote or push targets (optional script only).
+
+---
+
+## Merge resolution notes (implementation)
+
+- **`app/api/chat/route.js`**: Streaming OpenRouter + `retrieveKnowledgeContext` + `buildAgribotSystemPrompt`; optional **`caseContext`** / **`farmProfile`** appended to the system prompt (from backup helpers).
+- **`app/chat/page.js`**: i18n, storage, detect handoff, **`Suspense`** for `useSearchParams`; client streams plain-text response; sends **`messages`** + optional context keys.
+- **`app/detect/page.js`**: Uses **`POST /api/predict-tea`** (same-origin proxy to `ML_API_URL`).
+- **`.gitignore`**: Tracks **`!.env.example`** and **`!.env.local.example`**.
