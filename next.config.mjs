@@ -7,6 +7,13 @@ try {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /** Expose ML_API_URL to the browser for the detect page (client-side axios). */
+  env: {
+    NEXT_PUBLIC_ML_API_URL:
+      process.env.ML_API_URL ||
+      process.env.NEXT_PUBLIC_ML_API_URL ||
+      "http://127.0.0.1:8000",
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },

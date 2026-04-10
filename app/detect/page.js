@@ -11,6 +11,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
 import axios from "axios";
 
+/** Base URL for FastAPI disease model; from ML_API_URL (see next.config.mjs → NEXT_PUBLIC_ML_API_URL). */
+const getMlApiBase = () =>
+  process.env.NEXT_PUBLIC_ML_API_URL || "http://127.0.0.1:8000";
+
 const diseaseCures = {
   "bird eye spot in tea": {
     treatment: [
@@ -115,7 +119,7 @@ export default function DetectionPage() {
     formData.append('image', imageFile);
 
     try {
-      const response = await axios.post('http://localhost:8000/predict_tea_disease', formData, {
+      const response = await axios.post(`${getMlApiBase().replace(/\/$/, "")}/predict_tea_disease`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
