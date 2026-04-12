@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Thermometer, Droplets, Wind, Sun, Sprout, AlertCircle } from "lucide-react";
+import { Thermometer, Droplets, Wind, Sun, Sprout, AlertCircle, MessageSquare } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import { writeSensorContext } from "@/lib/sensorContext";
+import { logger } from "@/lib/logger";
 
 interface SensorData {
   temperature: number;
@@ -17,6 +21,7 @@ interface SensorData {
 
 export default function LiveSensorPage() {
   const { t } = useLanguage();
+  const router = useRouter();
   const [data, setData] = useState<SensorData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
@@ -43,8 +48,8 @@ export default function LiveSensorPage() {
           const date = new Date(jsonData.timestamp);
           setLastUpdated(date.toLocaleTimeString());
         }
-      } catch (err: any) {
-        console.error(err);
+      } catch (err: unknown) {
+        logger.dev("live-sensor fetch", err instanceof Error ? err.message : err);
         setError(t("liveSensor.connectError"));
       }
     };
@@ -57,6 +62,13 @@ export default function LiveSensorPage() {
 
     return () => clearInterval(intervalId);
   }, [t]);
+
+  /** Save snapshot + open chat so AgriBot receives the same fields via GET /sensor or session handoff. */
+  const openAgriBotWithReadings = () => {
+    if (!data) return;
+    writeSensorContext(data);
+    router.push("/chat?from=live-sensor");
+  };
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 md:p-12 font-sans overflow-hidden relative">
@@ -82,7 +94,11 @@ export default function LiveSensorPage() {
             </motion.div>
           </div>
           
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex flex-col items-end gap-3"
+          >
             {lastUpdated && !error && (
               <div className="flex items-center gap-3 px-4 py-2.5 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md rounded-2xl shadow-sm border border-zinc-200/50 dark:border-zinc-800/50">
                 <span className="relative flex h-3 w-3">
@@ -93,6 +109,16 @@ export default function LiveSensorPage() {
                   {t("liveSensor.updated")}: {lastUpdated}
                 </span>
               </div>
+            )}
+            {data && !error && (
+              <Button
+                type="button"
+                onClick={openAgriBotWithReadings}
+                className="gap-2 shadow-md"
+              >
+                <MessageSquare className="h-4 w-4 shrink-0" aria-hidden />
+                {t("liveSensor.openAgriBot")}
+              </Button>
             )}
           </motion.div>
         </div>

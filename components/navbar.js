@@ -25,17 +25,20 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  const navLinks = isLoggedIn
-    ? [
-        { href: "/", label: t("nav.home") },
-        { href: "/detect", label: t("nav.diseaseDetection") },
-        { href: "/chat", label: t("nav.agriBot") },
-        { href: "/farm-profile", label: t("nav.farmProfile") },
-        { href: "/marketplace", label: t("nav.marketplace") },
-      ]
-    : [
-        
-      ]
+  /**
+   * Core app destinations — visible to everyone so guests can explore Detect, AgriBot,
+   * Marketplace, etc. (Auth still gates sensitive actions inside those pages if needed.)
+   * Dashboard is appended only when signed in.
+   */
+  const navLinks = [
+    { href: "/", label: t("nav.home") },
+    { href: "/detect", label: t("nav.diseaseDetection") },
+    { href: "/chat", label: t("nav.agriBot") },
+    { href: "/farm-profile", label: t("nav.farmProfile") },
+    { href: "/marketplace", label: t("nav.marketplace") },
+    { href: "/live-sensor", label: t("nav.liveSensor") },
+    ...(isLoggedIn ? [{ href: "/dashboard", label: t("nav.dashboard") }] : []),
+  ]
 
   return (
     <header

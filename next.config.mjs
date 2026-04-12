@@ -7,6 +7,13 @@ try {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /** Expose ML_API_URL to the browser for the detect page (client-side axios). */
+  env: {
+    NEXT_PUBLIC_ML_API_URL:
+      process.env.ML_API_URL ||
+      process.env.NEXT_PUBLIC_ML_API_URL ||
+      "http://127.0.0.1:8000",
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -16,11 +23,8 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  experimental: {
-    webpackBuildWorker: true,
-    parallelServerBuildTraces: true,
-    parallelServerCompiles: true,
-  },
+  // Avoid parallel webpack workers / parallel compiles: they can race the dev disk cache and
+  // produce ENOENT on .pack.gz plus 404 on /_next/static/* while HTML still returns 200.
 }
 
 mergeConfig(nextConfig, userConfig)

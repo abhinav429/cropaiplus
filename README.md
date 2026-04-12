@@ -1,149 +1,214 @@
-# CropAIplus — runbook for your machine
+# CropAIplus — current project overview
 
-Quick guide to run the **Next.js frontend** and optional **Python disease-detection API** on Windows (or macOS/Linux).
+CropAIplus is a **Next.js 15** (App Router) web app for farmers: **multilingual UI**, **disease detection** (via an optional Python **CropAPI**), **live sensor** polling, **farm profile**, and **AgriBot** chat. The assistant is powered by **OpenRouter** on the **server only**; the browser talks to **`POST /api/chat`** and never sees the API key.
 
----
-
-## What you need installed
-
-| Tool | Notes |
-|------|--------|
-| **Node.js** | LTS (e.g. 20.x or 22.x) — includes `npm` |
-| **Python 3.10+** | Only if you run **CropAPI** (disease detection) |
-| **Git** | Optional; only if you clone from a repo |
+This README describes the **current architecture** and how to run it. For a **friend-focused diff** vs an older baseline (especially the **knowledge / memory** stack), see **`FRIEND_CHANGES.md`**. A shorter historical bullet list is in **`CHANGES.md`**.
 
 ---
 
-## 1. Frontend (required for the web app)
+## Architecture at a glance
+
+```mermaid
+flowchart LR
+  subgraph browser [Browser]
+    UI[Pages /chat /detect /live-sensor ...]
+    LS[(localStorage / sessionStorage)]
+  end
+  subgraph next [Next.js server]
+    API_CHAT["/api/chat"]
+    API_ML["/api/predict-tea"]
+    RT_SENSOR["/sensor GET POST"]
+    KNOW[knowledge/*.md + retrieve.js]
+  end
+  subgraph external [External]
+    OR[OpenRouter API]
+    ML[CropAPI FastAPI :8000]
+  end
+  UI --> API_CHAT
+  UI --> API_ML
+  UI --> RT_SENSOR
+  LS --> UI
+  API_CHAT --> KNOW
+  API_CHAT --> OR
+  API_ML --> ML
+```
+
+- **AgriBot:** `app/chat/page.js` streams the reply from **`/api/chat`**, sending `messages` and optional **`caseContext`**, **`farmProfile`**, **`sensorContext`**.
+- **Knowledge layer:** On each request, `lib/knowledge/retrieve.js` reads **`knowledge/`**, scores pages (keywords + optional context hints), and injects a bounded markdown excerpt + **`Sources used: …`** into the system prompt (`lib/agribot-prompt.js`). No vector database.
+- **Disease detection:** The client posts to **`/api/predict-tea`**, which proxies to **`ML_API_URL`** (default `http://127.0.0.1:8000`).
+- **Sensors:** Devices **`POST /sensor`**; the UI polls **`GET /sensor`**. Data is held **in memory** on the Node process (resets on server restart).
+
+---
+
+## Requirements
+
+| Tool | Purpose |
+|------|---------|
+| **Node.js** (LTS, e.g. 20.x or 22.x) | Next.js app |
+| **Python 3.10+** | Optional — CropAPI only |
+| **Git** | Optional |
+
+---
+
+## Quick start (frontend)
 
 ```bash
 cd CropAIplus
 npm install
+cp .env.example .env.local
+# Edit .env.local — at minimum set OPENROUTER_API_KEY for chat
 npm run dev
 ```
 
-Open **http://localhost:3000** (or **http://127.0.0.1:3000**).
+Open **http://localhost:3000**.
 
-### Environment variables
+If the tab shows a blank page but the server returns 200, stale webpack cache is likely:
 
-Copy **`.env.local.example`** to **`.env.local`** and edit, or create **`.env.local`** manually in the **project root** (same folder as `package.json`):
-
-```env
-# Required for AgriBot chat (OpenRouter)
-OPENROUTER_API_KEY=your_key_here
-
-# Optional: if CropAPI runs somewhere other than http://127.0.0.1:8000
-# ML_API_URL=http://127.0.0.1:8000
+```bash
+npm run dev:clean
 ```
 
-Restart `npm run dev` after changing `.env.local`.
-
-### Firebase (login / signup)
-
-The app expects Firebase config in **`lib/firebase.js`**. Replace placeholders with your project’s keys if you use authentication.
+That runs **`rm -rf .next`** then **`next dev`**. Do not delete **`.next`** while `next dev` is still running.
 
 ---
 
-## 2. Disease detection API (optional)
+## Environment variables
 
-Used by **Disease Detection** (`/detect`). The Next app talks to it via **`/api/predict-tea`**, which proxies to the URL in **`ML_API_URL`** (default `http://127.0.0.1:8000`).
+Copy **`.env.example`** → **`.env.local`** in the project root (next to `package.json`).
+
+| Variable | Required | Role |
+|----------|----------|------|
+| **`OPENROUTER_API_KEY`** | For AgriBot | Server-side chat completions via OpenRouter. |
+| **`OPENROUTER_MODEL`** | No | Overrides default model id (see `.env.example`). |
+| **`OPENROUTER_SITE_URL`** | No | Referer header for OpenRouter. |
+| **`ML_API_URL`** | No | CropAPI base URL; `next.config.mjs` also exposes **`NEXT_PUBLIC_ML_API_URL`** for the detect page. |
+| **`NEXT_PUBLIC_FIREBASE_*`** | No | Client Firebase config (`lib/firebase.js`); falls back to built-in placeholders if unset. |
+| **`SENSOR_INGEST_SECRET`** | No | If set, **`POST /sensor`** requires **`Authorization: Bearer <secret>`**. |
+
+Restart **`npm run dev`** after editing **`.env.local`**.
+
+---
+
+## Optional: CropAPI (disease detection)
+
+Used by **`/detect`**. From the **`CropAPI/`** folder (see that directory’s `app.py` and model files):
 
 ```bash
-cd CropAPI
 python -m venv .venv
-.venv\Scripts\activate
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install fastapi uvicorn python-multipart pillow numpy pandas tensorflow
-```
-
-Place **`tea_VGG16_model.h5`** and use **`tea diseases.csv`** next to **`app.py`** (paths are relative to that folder).
-
-```bash
 uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-Or:
-
-```bash
-python app.py
-```
-
-If this service is **not** running, the UI should show a clear “ML service offline” style message when you try to analyze an image.
+If CropAPI is down, the UI should show an unreachable / 503-style error when analyzing an image.
 
 ---
 
-## 3. Ports
+## Ports
 
 | Service | Port |
 |---------|------|
 | Next.js (`npm run dev`) | **3000** |
-| CropAPI (uvicorn) | **8000** |
-
-Keep both running in **two terminals** if you need full disease detection.
+| CropAPI | **8000** |
 
 ---
 
-## 4. Hardware / live sensors (optional)
+## Main routes and features
 
-The **live sensor** page reads data from **`GET /sensor`** (Next.js route). An ESP32 or similar can **`POST` JSON** to `/sensor`. No extra install beyond the Next app.
+| Path | Description |
+|------|-------------|
+| **`/`** | Landing |
+| **`/chat`** | AgriBot; streams from **`/api/chat`**; optional handoffs from detect / farm / sensors |
+| **`/detect`** | Image upload / camera → **`/api/predict-tea`** → CropAPI |
+| **`/farm-profile`** | Farm context saved in **`localStorage`**; sent as **`farmProfile`** to chat |
+| **`/live-sensor`** | Polls **`GET /sensor`**; can push **`sensorContext`** and open chat |
+| **`/sensor`** | **`GET`** latest reading (404 if empty); **`POST`** ingest (see `.env.example` for auth) |
+| **`/auth/login`**, **`/auth/signup`** | Firebase-backed auth flows |
+| **`/marketplace/**`** | Marketplace UI (cart, checkout, payment pages) |
 
----
-
-## 5. Multilingual UI
-
-Use the **language control in the navbar** (English / हिंदी / தமிழ்). Choice is stored in the browser.
-
----
-
-## 5b. Farm profile (optional)
-
-Open **`/farm-profile`** (also linked from the navbar when logged in and from the footer). Enter crop, location, irrigation, and farm size — **saved in `localStorage`** (`cropai-farm-profile`) on this browser only.  
-When you use **AgriBot** (`/chat`), that profile is sent as **`farmProfile`** in each chat request and merged into the assistant’s system prompt so answers match your farm context.
+**Internationalization:** English, Hindi, Tamil — **`contexts/LanguageContext.tsx`** (+ shim **`LanguageContext.js`**), **`lib/locales/*`**, navbar language switcher.
 
 ---
 
-## 6. Troubleshooting
+## Knowledge pack (curated “memory” for the LLM)
 
-| Issue | What to try |
-|-------|-------------|
-| `npm` / `next` errors | Delete `node_modules`, run `npm install` again |
-| Chat always errors | Set **`OPENROUTER_API_KEY`** in `.env.local` |
-| Disease detection fails | Start CropAPI on port **8000**; confirm **`tea_VGG16_model.h5`** exists beside `app.py` |
-| TensorFlow won’t import | Install a **CPU build** matching your OS/arch (Windows x64 vs Apple Silicon differ) |
+- **Edit content:** `knowledge/index.md`, `knowledge/pages/*.md`, optional YAML front-matter (`crops`, `topics`, `risk`).
+- **Versioning:** `knowledge/manifest.json` (pack id, version, effective date).
+- **Logic:** `lib/knowledge/retrieve.js`, `frontMatter.js`, `manifest.js`.
 
----
-
-## 7. Project map (short)
-
-- **`app/`** — Next.js App Router pages and API routes (`api/chat`, `api/predict-tea`, `sensor`, …); **`app/farm-profile/`** — farmer/farm context (browser `localStorage`, used by AgriBot prompts)
-- **`CropAPI/`** — FastAPI + TensorFlow model for tea disease prediction
-- **`lib/locales/`** — UI translations
-- **`CHANGES.md`** — feature changelog vs earlier base (for teammates)
+Behavior is documented in **`KNOWLEDGE_INTEGRATION_PLAN.md`** and **`KNOWLEDGE_LAYER_ENHANCEMENT_PLAN.md`**. Step-by-step tests for your teammate are in **`FRIEND_CHANGES.md`**.
 
 ---
 
-## 8. Push this repo to GitHub (`abhinav429/cropaiplus`)
+## Browser-side “memory” (not the wiki)
 
-The remote **`abhinav`** is set to [github.com/abhinav429/cropaiplus](https://github.com/abhinav429/cropaiplus). **You must sign in once** (this machine cannot push without your credentials).
+- **`lib/chatStorage.js`** — Persists chat messages in **`localStorage`**.
+- **`lib/farmProfile.js`** — Farm profile blob + update event.
+- **`lib/detectCase.js`** — Session disease case after detection.
+- **`lib/sensorContext.js`** — Sensor snapshot passed into chat when coming from live sensors.
 
-**Option A — run the helper script** (from the project root):
+---
+
+## Scripts (`package.json`)
+
+| Script | Command |
+|--------|---------|
+| **`npm run dev`** | Development server |
+| **`npm run dev:clean`** | `rm -rf .next` then `next dev` |
+| **`npm run clean`** | Remove **`.next`** only |
+| **`npm run build`** | Production build |
+| **`npm run start`** | Serve production build |
+| **`npm run push:github`** | Helper push script (if configured) |
+
+---
+
+## Troubleshooting
+
+| Symptom | What to try |
+|---------|-------------|
+| Chat 503 / “misconfiguration” | Set **`OPENROUTER_API_KEY`** in **`.env.local`**. |
+| Chat 402 / 429 | OpenRouter billing or rate limits — credits, wait, or **`OPENROUTER_MODEL`**. |
+| Detect fails / 503 | Start CropAPI; check **`ML_API_URL`**. |
+| Blank UI, **`/_next/static/*` 404** | **`npm run dev:clean`**; avoid deleting **`.next`** while dev is running. |
+| **`next` / `tsc` permission denied** | `chmod +x node_modules/.bin/next` or run via `node node_modules/next/dist/bin/next …` |
+| TensorFlow / Python issues | Use a CPU wheel matching your OS/arch (see CropAPI docs). |
+
+---
+
+## Security
+
+- Do **not** commit **`.env.local`**, API keys, or Firebase secrets.
+- Share **`.env.example`** only as a template.
+- If **`SENSOR_INGEST_SECRET`** is set, treat it like a password and configure the ESP32 with the same Bearer token.
+
+---
+
+## Repository layout (high level)
+
+- **`app/`** — Pages, layouts, **`api/chat`**, **`api/predict-tea`**, **`sensor`**
+- **`components/`**, **`contexts/`** — UI and providers
+- **`lib/`** — Firebase, i18n, chat/sensor/detect storage, **`lib/knowledge/`**, **`lib/logger.js`**, prompts
+- **`knowledge/`** — Curated markdown + **`manifest.json`**
+- **`CropAPI/`** — FastAPI tea disease service
+- **`cropai-knowledge-base/`** — Separate experimental wiki app (not required to run main CropAIplus)
+
+---
+
+## Pushing to GitHub
+
+If remote **`abhinav`** (or similar) is configured:
 
 ```bash
 chmod +x scripts/push-to-abhinav.sh   # once
-./scripts/push-to-abhinav.sh
-# or: npm run push:github
+npm run push:github
 ```
 
-When Git asks to authenticate, use **GitHub → Settings → Developer settings → Personal access tokens** and paste a token with **`repo`** scope as the password (HTTPS), or set up **SSH keys** and switch the remote:
-
-```bash
-git remote set-url abhinav git@github.com:abhinav429/cropaiplus.git
-git push -u abhinav main
-```
-
-After a successful push, the repo page shows your files **immediately** (no long wait).
+Use a **PAT** (HTTPS) or **SSH** as documented in your Git hosting settings. See previous README notes for `git remote set-url` if switching to SSH.
 
 ---
 
-## Security reminder
+## Further reading
 
-Do **not** commit **`.env.local`**, API keys, or Firebase secrets. Share **`.env.local.example`** (template only) with your team.
+- **`FRIEND_CHANGES.md`** — What changed vs the original fork (emphasis on knowledge + memory) + **testing checklist** for a teammate.
+- **`CHANGES.md`** — Compact changelog bullets.
+- **`KNOWLEDGE_INTEGRATION_PLAN.md`**, **`KNOWLEDGE_LAYER_ENHANCEMENT_PLAN.md`** — Design decisions for the wiki layer.

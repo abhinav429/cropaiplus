@@ -14,6 +14,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import Link from "next/link";
 import { MessageSquareText } from "lucide-react";
 import { writeDetectCase, clearDetectCase } from "@/lib/detectCase";
+import { logger } from "@/lib/logger";
 
 const diseaseCures = {
   "bird eye spot in tea": {
@@ -89,7 +90,7 @@ export default function DetectionPage() {
       video.play();
       setIsCameraActive(true);
     } catch (error) {
-      console.error("Error accessing camera:", error);
+      logger.error("Error accessing camera:", error);
     }
   };
 
@@ -120,10 +121,9 @@ export default function DetectionPage() {
     formData.append('image', imageFile);
 
     try {
-      // Same-origin proxy → /api/predict-tea → CropAPI (avoids browser CORS / localhost quirks)
+      // Same-origin proxy → /api/predict-tea → CropAPI (ML_API_URL on server; avoids browser CORS)
       const response = await axios.post("/api/predict-tea", formData);
 
-      console.log('API Response:', response.data);
       setPredictionResult(response.data);
       const displayConf = Math.min(response.data.confidence_score * 100 + 50, 96);
       const treatmentList = diseaseCures[response.data.predicted_class]?.treatment ?? [];
@@ -151,7 +151,7 @@ export default function DetectionPage() {
         treatmentSummaries: treatmentList.slice(0, 6),
       });
     } catch (error) {
-      console.error('Error sending image to API:', error);
+      logger.error("Error sending image to API:", error);
       const status = error.response?.status;
       const data = error.response?.data;
       const unreachable =

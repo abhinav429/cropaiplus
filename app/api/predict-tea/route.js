@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { logger } from "@/lib/logger"
 
 /**
  * Proxies crop images to the FastAPI CropAPI service.
@@ -37,7 +38,7 @@ export async function POST(request) {
       return NextResponse.json({ error: "Invalid JSON from ML service" }, { status: 502 })
     }
   } catch (err) {
-    console.error("[predict-tea] proxy to ML server failed:", err)
+    logger.error("[predict-tea] proxy to ML server failed:", err)
     return NextResponse.json(
       {
         error: "ML_SERVICE_UNREACHABLE",

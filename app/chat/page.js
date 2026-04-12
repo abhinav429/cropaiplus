@@ -13,6 +13,7 @@ import {
   ImagePlus,
   Sprout,
   Trash2,
+  Activity,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -25,6 +26,20 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { readDetectCase, clearDetectCase } from "@/lib/detectCase"
 import { loadChatMessages, saveChatMessages, clearChatMessagesStorage } from "@/lib/chatStorage"
 import { loadFarmProfile, FARM_PROFILE_UPDATED_EVENT } from "@/lib/farmProfile"
+import { logger } from "@/lib/logger"
+import {
+  readSensorContext,
+  writeSensorContext,
+  clearSensorContext,
+  normalizeSensorPayload,
+} from "@/lib/sensorContext"
+import { Switch } from "@/components/ui/switch"
+import Link from "next/link"
+
+/** Strip timestamps and extra fields for /api/chat (OpenAI-style roles + content only). */
+function toApiMessages(list) {
+  return list.map(({ role, content }) => ({ role, content }))
+}
 
 function ChatLoadingFallback() {
   const { t } = useLanguage()
@@ -36,6 +51,8 @@ function ChatLoadingFallback() {
 /**
  * Chat UI + AgriBot. When a disease case exists in sessionStorage (from /detect),
  * we pass `caseContext` to `/api/chat` so replies reference that diagnosis.
+ * Optional `sensorContext` sends ESP32 live readings (same shape as GET /sensor).
+ * Responses stream as plain text (see app/api/chat/route.js).
  */
 function ChatPageContent() {
   const { t } = useLanguage()
@@ -61,6 +78,12 @@ function ChatPageContent() {
   const [farmProfile, setFarmProfile] = useState(() =>
     typeof window !== "undefined" ? loadFarmProfile() : null
   )
+  /** Latest snapshot for UI; refreshed from GET /sensor on each send when toggle is on. */
+  const [activeSensor, setActiveSensor] = useState(() =>
+    typeof window !== "undefined" ? readSensorContext() : null
+  )
+  /** When true, each message tries GET /sensor first, then falls back to session snapshot. */
+  const [includeSensorInChat, setIncludeSensorInChat] = useState(true)
 
   useEffect(() => {
     const sync = () => setFarmProfile(loadFarmProfile())
@@ -68,10 +91,16 @@ function ChatPageContent() {
     return () => window.removeEventListener(FARM_PROFILE_UPDATED_EVENT, sync)
   }, [])
 
-  // If user landed with ?from=detect, strip query after read (keeps URL clean)
+  // If user landed with ?from=detect or ?from=live-sensor, strip query after read (keeps URL clean)
   useEffect(() => {
-    if (searchParams.get("from") === "detect") {
+    const from = searchParams.get("from")
+    if (from === "detect" || from === "live-sensor") {
       router.replace("/chat", { scroll: false })
+    }
+    if (from === "live-sensor") {
+      const snap = readSensorContext()
+      setActiveSensor(snap)
+      setIncludeSensorInChat(true)
     }
   }, [searchParams, router])
 
@@ -111,9 +140,45 @@ function ChatPageContent() {
     saveChatMessages(messages)
   }, [messages])
 
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages, isTyping])
+
   const handleClearCase = () => {
     clearDetectCase()
     setActiveCase(null)
+  }
+
+  const handleSensorRefresh = async () => {
+    try {
+      const r = await fetch("/sensor")
+      if (!r.ok) {
+        toast({
+          title: t("chat.sensorNoDataTitle"),
+          description: t("chat.sensorNoDataBody"),
+          variant: "destructive",
+        })
+        return
+      }
+      const j = await r.json()
+      const n = normalizeSensorPayload(j)
+      if (n) {
+        writeSensorContext(n)
+        setActiveSensor(n)
+        toast({ title: t("chat.sensorRefreshedTitle"), description: t("chat.sensorRefreshedBody") })
+      }
+    } catch {
+      toast({
+        title: t("chat.errorTitle"),
+        description: t("chat.sensorNoDataBody"),
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleClearSensor = () => {
+    clearSensorContext()
+    setActiveSensor(null)
   }
 
   const handleClearConversation = () => {
@@ -129,66 +194,112 @@ function ChatPageContent() {
   }
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || isTyping) return
+    const text = inputValue.trim()
+    if (!text || isTyping) return
 
     const userMessage = {
       role: "user",
-      content: inputValue,
+      content: text,
       timestamp: new Date().toISOString(),
     }
 
-    const updatedMessages = [...messages, userMessage]
-    setMessages(updatedMessages)
+    const historyForApi = toApiMessages([...messages, userMessage])
+
+    setMessages((prev) => [...prev, userMessage])
     setInputValue("")
     setIsTyping(true)
 
     try {
-      const payload = {
-        messages: updatedMessages,
-        ...(activeCase ? { caseContext: activeCase } : {}),
-        ...(farmProfile ? { farmProfile } : {}),
+      /** Resolve ESP32 readings: prefer live GET /sensor, else last snapshot from /live-sensor handoff. */
+      let sensorPayload = null
+      if (includeSensorInChat) {
+        try {
+          const sr = await fetch("/sensor")
+          if (sr.ok) {
+            const j = await sr.json()
+            sensorPayload = normalizeSensorPayload(j)
+            if (sensorPayload) {
+              writeSensorContext(sensorPayload)
+              setActiveSensor(sensorPayload)
+            }
+          }
+        } catch {
+          /* use snapshot below */
+        }
+        if (!sensorPayload) sensorPayload = readSensorContext()
       }
 
-      const response = await fetch("/api/chat", {
+      const res = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: historyForApi,
+          ...(activeCase ? { caseContext: activeCase } : {}),
+          ...(farmProfile ? { farmProfile } : {}),
+          ...(sensorPayload ? { sensorContext: sensorPayload } : {}),
+        }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        console.error("Error fetching AI response:", errorData)
-        toast({
-          title: t("chat.errorTitle"),
-          description: t("chat.errorContact"),
-          variant: "destructive",
-        })
+      if (!res.ok) {
+        let detail = t("chat.errorContact")
+        try {
+          const errJson = await res.json()
+          const e = errJson.error
+          if (typeof e === "string") detail = e
+          else if (e && typeof e === "object" && typeof e.message === "string") detail = e.message
+          else if (typeof errJson.message === "string") detail = errJson.message
+        } catch {
+          /* ignore */
+        }
+        toast({ title: t("chat.errorTitle"), description: detail, variant: "destructive" })
+        setIsTyping(false)
         return
       }
 
-      const data = await response.json()
-      const aiResponseContent = data.reply || ""
+      /** Stop the “typing” dots before streaming; the assistant bubble updates in place. */
+      setIsTyping(false)
 
-      if (aiResponseContent.trim()) {
-        const aiResponse = {
-          role: "assistant",
-          content: aiResponseContent,
-          timestamp: new Date().toISOString(),
-        }
-        setMessages((prev) => [...prev, aiResponse])
-      } else {
-        console.warn("Received an empty response from AI.")
+      const assistantShell = {
+        role: "assistant",
+        content: "",
+        timestamp: new Date().toISOString(),
+      }
+      setMessages((prev) => [...prev, assistantShell])
+
+      const reader = res.body?.getReader()
+      if (!reader) {
+        toast({ title: t("chat.errorTitle"), description: t("chat.errorReach"), variant: "destructive" })
+        setIsTyping(false)
+        return
+      }
+
+      const decoder = new TextDecoder()
+      let accumulated = ""
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        accumulated += decoder.decode(value, { stream: true })
+        setMessages((prev) => {
+          const next = [...prev]
+          const last = next.length - 1
+          if (last >= 0 && next[last].role === "assistant") {
+            next[last] = { ...next[last], content: accumulated }
+          }
+          return next
+        })
+      }
+
+      if (!accumulated.trim()) {
+        logger.devWarn("Empty streamed response from /api/chat")
       }
     } catch (error) {
-      console.error("Error fetching AI response:", error)
+      logger.error("Error fetching AI response:", error)
       toast({
         title: t("chat.errorTitle"),
-        description: t("chat.errorReach"),
+        description: error instanceof Error ? error.message : t("chat.errorReach"),
         variant: "destructive",
       })
-    } finally {
       setIsTyping(false)
     }
   }
@@ -297,6 +408,51 @@ function ChatPageContent() {
         </div>
       )}
 
+      <div
+        className="mb-4 rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-4 py-3 text-sm"
+        role="region"
+        aria-label={t("chat.sensorRegionLabel")}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <Activity className="h-5 w-5 text-cyan-600 dark:text-cyan-400 shrink-0" aria-hidden />
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+              <span className="font-medium text-foreground">{t("chat.sensorIncludeLabel")}</span>
+              <Switch
+                checked={includeSensorInChat}
+                onCheckedChange={setIncludeSensorInChat}
+                aria-label={t("chat.sensorIncludeLabel")}
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <Button type="button" variant="secondary" size="sm" onClick={handleSensorRefresh}>
+              {t("chat.sensorRefresh")}
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={handleClearSensor} disabled={!activeSensor}>
+              {t("chat.sensorClear")}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" asChild>
+              <Link href="/live-sensor">{t("chat.sensorOpenLive")}</Link>
+            </Button>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">{t("chat.sensorHint")}</p>
+        {activeSensor && (
+          <p className="text-xs font-mono text-foreground/90 mt-2 break-all">
+            {[
+              typeof activeSensor.temperature === "number" ? `${activeSensor.temperature.toFixed(1)}°C` : null,
+              typeof activeSensor.humidity === "number" ? `${activeSensor.humidity.toFixed(0)}% RH` : null,
+              typeof activeSensor.soil === "number" ? `soil ${activeSensor.soil}` : null,
+              typeof activeSensor.light === "number" ? `light ${activeSensor.light}` : null,
+              typeof activeSensor.gas === "number" ? `air ${activeSensor.gas}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        )}
+      </div>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -340,7 +496,9 @@ function ChatPageContent() {
                             : "bg-primary text-primary-foreground"
                         }`}
                       >
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                          {message.content || (message.role === "assistant" ? "\u00a0" : "")}
+                        </p>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">{formatTime(message.timestamp)}</p>
                     </div>
