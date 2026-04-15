@@ -1,14 +1,10 @@
+import { NextResponse } from "next/server"
 import { buildAgribotSystemPrompt } from "@/lib/agribot-prompt"
-import { retrieveKnowledgeContext } from "@/lib/knoawledge/retrieve"
+import { retrieveKnowledgeContext } from "@/lib/knowledge/retrieve"
 import { logger } from "@/lib/logger"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-
-/** OpenRouter model id (see https://openrouter.ai/models). */
-const DEFAULT_OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
-
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 /**
  * Normalize client messages: only user/assistant roles, string content, no timestamps.
@@ -85,95 +81,53 @@ function buildFarmProfileSystemAddendum(farmProfile) {
   ].join("\n")
 }
 
-/**
- * Stream OpenRouter SSE (OpenAI-compatible) and forward text deltas to the client.
- * @param {ReadableStream<Uint8Array> | null} body
- */
-async function* streamOpenRouterDeltas(body) {
-  if (!body) return
-  const reader = body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ""
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split("\n")
-      buffer = lines.pop() ?? ""
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed.startsWith("data:")) continue
-        const data = trimmed.slice(5).trim()
-        if (data === "[DONE]") return
-        try {
-          const json = JSON.parse(data)
-          const text = json.choices?.[0]?.delta?.content
-          if (text) yield text
-        } catch {
-          /* ignore partial JSON lines */
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock()
-  }
-}
-
-/**
- * POST /api/chat
- * Body: {
- *   messages: { role: 'user'|'assistant', content: string }[],
- *   caseContext?: object,
- *   farmProfile?: object,
- *   sensorContext?: object,
- * }
- * Response: streamed plain text (UTF-8) chunks from the model.
- *
- * Uses OpenRouter (OPENROUTER_API_KEY) — OpenAI-compatible API.
- * Augments the AgriBot + knowledge system prompt with optional detect handoff and farm profile.
- */
 export async function POST(request) {
-  const apiKey = process.env.OPENROUTER_API_KEY
-  if (!apiKey) {
-    return Response.json(
-      { error: "Server misconfiguration: OPENROUTER_API_KEY is not set." },
-      { status: 503 }
-    )
-  }
-
-  let body
   try {
-    body = await request.json()
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 })
-  }
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 })
+    }
 
-  const messages = sanitizeMessages(body.messages)
-  if (messages.length === 0) {
-    return Response.json(
-      { error: "messages must include at least one user or assistant entry." },
-      { status: 400 }
-    )
-  }
+    const { messages: rawMessages, caseContext, farmProfile, sensorContext } = body || {}
+    const messages = sanitizeMessages(rawMessages)
 
-  const caseContext = body.caseContext
-  const farmProfile = body.farmProfile
-  const sensorContext = body.sensorContext
+    if (messages.length === 0) {
+      return NextResponse.json(
+        { error: "No valid messages provided" },
+        { status: 400 }
+      )
+    }
 
-  /** Same optional payloads as system addenda — improves keyword retrieval against `knowledge/pages`. */
-  const knowledgeExcerpt = await retrieveKnowledgeContext(messages, {
-    caseContext,
-    farmProfile,
-    sensorContext,
-  })
-  let systemPrompt = buildAgribotSystemPrompt(knowledgeExcerpt)
+    const apiKey = process.env.OPENROUTER_API_KEY
+    if (!apiKey) {
+      logger.error("OPENROUTER_API_KEY is not set")
+      return NextResponse.json(
+        { error: "Server is not configured with an AI API key" },
+        { status: 500 }
+      )
+    }
+
+    /** Same optional payloads as system addenda — improves keyword retrieval against \`knowledge/pages\`. */
+    const knowledgeExcerpt = await retrieveKnowledgeContext(messages, {
+      caseContext,
+      farmProfile,
+      sensorContext,
+    })
+    
+    // Using current new feature: the built system prompt from the external file
+    // Replaces the old static SYSTEM_PROMPT.
+    const systemPrompt = buildAgribotSystemPrompt(knowledgeExcerpt)
 
     const caseAddendum = buildCaseContextSystemAddendum(caseContext)
     const farmAddendum = buildFarmProfileSystemAddendum(farmProfile)
-    const combinedSystem = [SYSTEM_PROMPT]
+    const sensorAddendum = buildSensorContextSystemAddendum(sensorContext)
+
+    const combinedSystem = [systemPrompt]
     if (caseAddendum.length > 0) combinedSystem.push(`---\n${caseAddendum}`)
     if (farmAddendum.length > 0) combinedSystem.push(`---\n${farmAddendum}`)
+    if (sensorAddendum.length > 0) combinedSystem.push(`---\n${sensorAddendum}`) // using the new feature
     const systemContent = combinedSystem.join("\n\n")
 
     const openRouterMessages = [
@@ -181,13 +135,10 @@ export async function POST(request) {
         role: "system",
         content: systemContent,
       },
-      ...messages.map((m) => ({
-        role: m.role === "assistant" ? "assistant" : "user",
-        content: m.content ?? "",
-      })),
+      ...messages,
     ]
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const upstream = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -199,54 +150,53 @@ export async function POST(request) {
       body: JSON.stringify({
         model: "qwen/qwen3-vl-235b-a22b-thinking",
         messages: openRouterMessages,
+        max_tokens: 500, // kept as 500 as in the older snippet
       }),
     })
 
-  if (!upstream.ok) {
-    const raw = await upstream.text()
-    let detail = upstream.statusText
-    try {
-      const errJson = JSON.parse(raw)
-      if (errJson.error?.message) detail = errJson.error.message
-      else if (typeof errJson.error === "string") detail = errJson.error
-      else if (errJson.message) detail = errJson.message
-    } catch {
-      if (raw?.trim()) detail = raw.slice(0, 500)
+    if (!upstream.ok) {
+      const errorText = await upstream.text().catch(() => "")
+      logger.error("OpenRouter error:", upstream.status, errorText)
+      return NextResponse.json(
+        {
+          error: "OpenRouter API request failed",
+          details: errorText || undefined,
+        },
+        { status: upstream.status }
+      )
     }
-    /** 402 = OpenRouter billing / credits; 429 = rate limit — see https://openrouter.ai/docs/errors */
-    logger.error(
-      "[/api/chat] OpenRouter error:",
-      upstream.status,
-      detail,
-      upstream.status === 402 ? "(add credits at openrouter.ai or set OPENROUTER_MODEL to an available model)" : ""
-    )
-    return Response.json(
-      {
-        error: detail || "Upstream model error.",
-        status: upstream.status,
+
+    const data = await upstream.json()
+    let reply =
+      data?.choices?.[0]?.message?.content ??
+      data?.choices?.[0]?.delta?.content ??
+      ""
+
+    // Sometimes the model returns a JSON-formatted string like {"reply": "actual response"}
+    try {
+      const cleanedMatch = reply.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      const jsonString = cleanedMatch ? cleanedMatch[1] : reply;
+      const parsed = JSON.parse(jsonString);
+      if (parsed && typeof parsed.reply === "string") {
+        reply = parsed.reply;
+      } else if (parsed && typeof parsed.response === "string") {
+        reply = parsed.response;
+      }
+    } catch {
+      // It's not JSON, which is perfectly fine, use the raw reply
+    }
+
+    return new Response(reply, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
       },
-      { status: 502 }
+    })
+  } catch (error) {
+    logger.error("Chat route error:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
     )
   }
-
-  const encoder = new TextEncoder()
-  const readable = new ReadableStream({
-    async start(controller) {
-      try {
-        for await (const text of streamOpenRouterDeltas(upstream.body)) {
-          controller.enqueue(encoder.encode(text))
-        }
-        controller.close()
-      } catch (e) {
-        controller.error(e)
-      }
-    },
-  })
-
-  return new Response(readable, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-store",
-    },
-  })
 }

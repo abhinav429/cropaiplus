@@ -32,17 +32,17 @@ export default function LiveSensorPage() {
         const response = await fetch("/sensor");
         if (!response.ok) {
           if (response.status === 404) {
-             setError(t("liveSensor.waiting"));
+            setError(t("liveSensor.waiting"));
           } else {
-             throw new Error("Failed to fetch sensor data");
+            throw new Error("Failed to fetch sensor data");
           }
           return;
         }
-        
+
         const jsonData = await response.json();
         setData(jsonData);
         setError(null);
-        
+
         // Format timestamp
         if (jsonData.timestamp) {
           const date = new Date(jsonData.timestamp);
@@ -72,13 +72,13 @@ export default function LiveSensorPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 md:p-12 font-sans overflow-hidden relative">
-      
+
       {/* Decorative background gradients */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-emerald-500/10 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-blue-500/10 blur-[120px] pointer-events-none" />
-      
+
       <div className="max-w-5xl mx-auto space-y-8 relative z-10">
-        
+
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-zinc-200 dark:border-zinc-800">
           <div className="space-y-1">
@@ -93,7 +93,7 @@ export default function LiveSensorPage() {
               <p className="text-zinc-500 dark:text-zinc-400 text-lg mt-1">{t("liveSensor.subtitle")}</p>
             </motion.div>
           </div>
-          
+
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -124,8 +124,8 @@ export default function LiveSensorPage() {
         </div>
 
         {error && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }} 
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center gap-3 p-4 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 rounded-xl border border-orange-200 dark:border-orange-800/30"
           >
@@ -143,7 +143,7 @@ export default function LiveSensorPage() {
 
         {/* Dashboard Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          
+
           <SensorCard
             title={t("liveSensor.temperature")}
             value={data?.temperature ? `${data.temperature.toFixed(1)}°C` : '--'}
@@ -210,7 +210,7 @@ function SensorCard({ title, value, icon, color, subtitle, delay }: { title: str
           </div>
         </CardHeader>
         <CardContent className="pt-6 flex-grow flex flex-col justify-center">
-          <motion.div 
+          <motion.div
             key={value} // This causes the number to lightly animate when it changes
             initial={{ opacity: 0.5, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
